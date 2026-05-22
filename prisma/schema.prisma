@@ -1,0 +1,207 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN_DLH
+  PETUGAS_LAPANGAN
+  PERUSAHAAN
+  PENGANGKUT
+  AUDITOR
+}
+
+enum CompanyStatus {
+  PENDING
+  REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum DocType {
+  SPPL
+  UKL_UPL @map("UKL-UPL")
+}
+
+enum WasteLogStatus {
+  Terverifikasi
+  Proses_Verifikasi @map("Proses Verifikasi")
+  Terjadwal_Pickup @map("Terjadwal Pickup")
+  Ditolak
+}
+
+enum PickupStatus {
+  PENDING
+  PRICED
+  PAID
+  ON_THE_ROAD
+  LOADED
+  COMPLETED
+}
+
+enum InvoiceType {
+  Pengangkutan
+  Retribusi_SPPL @map("Retribusi SPPL")
+  Retribusi_UKL_UPL @map("Retribusi UKL-UPL")
+  Denda
+}
+
+enum InvoiceStatus {
+  UNPAID
+  ESCROW
+  SETTLED
+  REFUNDED
+}
+
+enum InspectionStatus {
+  Selesai
+  Terjadwal
+  Dibatalkan
+}
+
+enum NotificationType {
+  WARNING
+  INFO
+  SUCCESS
+  DANGER
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          UserRole
+  companyId     String?   // Keep for fallback compatibility
+  transporterId String?   // ID Pengangkut (opsional jika PENGANGKUT)
+  officerId     String?   // ID Petugas Lapangan (opsional jika PETUGAS_LAPANGAN)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  companies     Company[] @relation("UserCompanies")
+}
+
+model Company {
+  id               String        @id @default(uuid())
+  companyName      String
+  nib              String        @unique
+  npwp             String
+  picName          String
+  picPhone         String
+  picRole          String
+  investmentType   String        // PMDN / PMA
+  yearBuilt        String
+  buildingArea     Float
+  operationalHours String
+  rawMaterials     String
+  waterSource      String
+  powerSource      String
+  kbli             String
+  investment       Float
+  landArea         Float
+  employees        Int
+  lat              String
+  lng              String
+  address          String
+  docType          DocType
+  status           CompanyStatus @default(PENDING)
+  score            Float?        // ESG Score kepatuhan (0 - 100)
+  wasteInfo        String?
+  hasTps           Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  picId            String?
+  pic              User?         @relation("UserCompanies", fields: [picId], references: [id], onDelete: Cascade)
+
+  wasteLogs        WasteLog[]
+  pickupRequests   PickupRequest[]
+  invoices         Invoice[]
+  inspections      Inspection[]
+}
+
+model WasteLog {
+  id          String         @id @default(uuid())
+  companyId   String
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type        String         // Contoh: Oli Bekas, Limbah Cair Kimia, dll
+  volume      Float
+  unit        String         // L / kg / m³
+  date        String         // Format: YYYY-MM-DD
+  method      String         // Dinas / Mandiri
+  status      WasteLogStatus
+  note        String?
+  createdAt   DateTime       @default(now())
+}
+
+model PickupRequest {
+  id              String       @id @default(uuid())
+  companyId       String
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  wasteType       String
+  volume          String       // Contoh: "45 L"
+  date            String       // Format: YYYY-MM-DD
+  status          PickupStatus @default(PENDING)
+  transporterId   String       // Contoh: "TRANS-001"
+  transporterName String
+  cost            Float?       // Biaya pengangkutan (setelah diisi pengangkut)
+  plateNo         String?
+  driverName      String?
+  evidencePhoto   String?
+  invoiceId       String?
+  address         String?
+  createdAt       DateTime     @default(now())
+}
+
+model Invoice {
+  id          String        @id @default(uuid())
+  companyId   String
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type        InvoiceType
+  amount      Float
+  date        String        // Format: YYYY-MM-DD
+  status      InvoiceStatus @default(UNPAID)
+  createdAt   DateTime      @default(now())
+}
+
+model Inspection {
+  id             String           @id @default(uuid())
+  companyId      String
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inspectorId    String
+  inspectorName  String
+  date           String           // Format: YYYY-MM-DD
+  score          Float?           // Nilai hasil inspeksi (0-100)
+  status         InspectionStatus @default(Terjadwal)
+  location       String
+  notes          String?
+  photo          String?
+  bapSigned      Boolean          @default(false)
+  
+  // Checklist item disimpan sebagai objek JSON
+  checklist      Json?            // Format: { tpsB3: boolean, ipal: boolean, apar: boolean, noise: boolean, safetyEquipment: boolean }
+  
+  createdAt      DateTime         @default(now())
+}
+
+model SystemNotification {
+  id        String           @id @default(uuid())
+  title     String
+  message   String
+  type      NotificationType
+  timestamp DateTime         @default(now())
+  read      Boolean          @default(false)
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  user      String
+  role      String
+  action    String
+}
