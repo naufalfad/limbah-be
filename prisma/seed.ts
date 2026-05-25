@@ -78,7 +78,7 @@ async function main() {
       email: 'transporter@geocitra.com',
       password: transporterPassword,
       role: UserRole.PENGANGKUT,
-      transporterId: 'TRANS-001',
+      // Hapus transporterId: 'TRANS-001' karena kita full migrasi ke UUID bawaan (id)
     },
   });
 
@@ -253,8 +253,8 @@ async function main() {
       volume: '45 L',
       date: '2026-05-15',
       status: PickupStatus.PAID,
-      transporterId: 'TRANS-001',
-      transporterName: 'PT. Transport Limbah Indonesia',
+      transporterId: transporter.id,
+      transporterName: transporter.name,
       cost: 450000,
       plateNo: 'D 9901 AB',
       driverName: 'Supriadi',
@@ -283,8 +283,8 @@ async function main() {
       volume: '15 L',
       date: '2026-05-19',
       status: PickupStatus.PRICED,
-      transporterId: 'TRANS-001',
-      transporterName: 'PT. Transport Limbah Indonesia',
+      transporterId: transporter.id,
+      transporterName: transporter.name,
       cost: 150000,
       plateNo: 'D 8812 XY',
       driverName: 'Mulyono',

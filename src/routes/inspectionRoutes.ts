@@ -9,7 +9,7 @@ router.get('/', requireAuth, getInspections);
 router.post(
   '/',
   requireAuth,
-  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH, UserRole.PETUGAS_LAPANGAN),
   createInspection
 );
 router.post(

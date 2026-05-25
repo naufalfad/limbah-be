@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createUser } from '../controllers/adminController';
+import { createUser, getTransporters } from '../controllers/adminController';
 import { requireAuth, requireRoles } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
 
@@ -10,6 +10,13 @@ router.post(
   requireAuth,
   requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
   createUser
+);
+
+router.get(
+  '/transporters',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+  getTransporters
 );
 
 export default router;

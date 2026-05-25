@@ -9,13 +9,13 @@ const createInspectionSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   inspectorId: z.string(),
   inspectorName: z.string().min(2),
-  location: z.string().min(5),
+  location: z.string(),
   notes: z.string().optional(),
 });
 
 const submitInspectionSchema = z.object({
   score: z.number().min(0).max(100),
-  notes: z.string().min(5),
+  notes: z.string().optional(),
   checklist: z.object({
     tpsB3: z.boolean(),
     ipal: z.boolean(),
@@ -142,6 +142,9 @@ export async function submitInspection(req: Request, res: Response) {
         checklist,
         status: InspectionStatus.Selesai,
         bapSigned: true,
+        // Override inspector UUID and Name to whoever actually submitted the audit
+        inspectorId: req.user.id,
+        inspectorName: req.user.name,
       },
     });
 

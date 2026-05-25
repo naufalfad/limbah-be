@@ -113,6 +113,9 @@ model Company {
   score            Float?        // ESG Score kepatuhan (0 - 100)
   wasteInfo        String?
   hasTps           Boolean       @default(false)
+  docNibUrl        String?       // Path/URL file scan NIB
+  docNpwpUrl       String?       // Path/URL file scan NPWP
+  docSiteplanUrl   String?       // Path/URL file Siteplan Layout (opsional)
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -147,14 +150,16 @@ model PickupRequest {
   volume          String       // Contoh: "45 L"
   date            String       // Format: YYYY-MM-DD
   status          PickupStatus @default(PENDING)
-  transporterId   String       // Contoh: "TRANS-001"
-  transporterName String
-  cost            Float?       // Biaya pengangkutan (setelah diisi pengangkut)
+  transporterId   String?      // Contoh: "TRANS-001"
+  transporterName String?
+  cost            Float?       // Biaya pengangkutan (setelah dihitung otomatis atau diisi Admin DLH)
   plateNo         String?
   driverName      String?
   evidencePhoto   String?
   invoiceId       String?
   address         String?
+  actualVolume    String?      // Laporan volume akhir dari transporter
+  transportReport String?      // Catatan laporan dari transporter
   createdAt       DateTime     @default(now())
 }
 

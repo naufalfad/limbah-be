@@ -21,6 +21,8 @@ const pricePickupSchema = z.object({
 const updateStatusSchema = z.object({
   status: z.enum([PickupStatus.ON_THE_ROAD, PickupStatus.LOADED, PickupStatus.COMPLETED]),
   evidencePhoto: z.string().optional(),
+  actualVolume: z.string().optional(),
+  transportReport: z.string().optional(),
 });
 
 export async function createPickup(req: Request, res: Response) {
@@ -46,6 +48,20 @@ export async function createPickup(req: Request, res: Response) {
       return res.status(403).json({ success: false, error: 'Forbidden: You do not own this company' });
     }
 
+    const parsedVolume = parseFloat(volume.replace(/[^0-9.]/g, '')) || 0;
+    const calculatedCost = parsedVolume > 0 ? parsedVolume * 10000 : 50000; // Flat Rp 10.000 per unit, min 50.000
+
+    // Generate Invoice automatically
+    const invoice = await prisma.invoice.create({
+      data: {
+        companyId,
+        type: InvoiceType.Pengangkutan,
+        amount: calculatedCost,
+        date: new Date().toISOString().split('T')[0],
+        status: InvoiceStatus.UNPAID,
+      },
+    });
+
     const pickup = await prisma.pickupRequest.create({
       data: {
         companyId,
@@ -53,17 +69,17 @@ export async function createPickup(req: Request, res: Response) {
         volume,
         date,
         address,
-        status: PickupStatus.PENDING,
-        transporterId: 'TRANS-001', // Default mock transporter
-        transporterName: 'PT. Transport Limbah Indonesia',
+        status: PickupStatus.PRICED,
+        cost: calculatedCost,
+        invoiceId: invoice.id,
       },
     });
 
     // Write system notification
     await prisma.systemNotification.create({
       data: {
-        title: 'Pengajuan Penjemputan Limbah',
-        message: `Pengajuan penjemputan limbah ${wasteType} dari ${company.companyName} telah didaftarkan.`,
+        title: 'Tagihan Penjemputan Limbah Diterbitkan',
+        message: `Pengajuan penjemputan limbah ${wasteType} dari ${company.companyName} terdaftar. Biaya pengangkutan otomatis: Rp ${calculatedCost.toLocaleString()}. Silakan selesaikan pembayaran agar Admin DLH dapat menugaskan pengangkut.`,
         type: NotificationType.INFO,
       },
     });
@@ -301,7 +317,7 @@ export async function updatePickupStatus(req: Request, res: Response) {
       return res.status(400).json({ success: false, error: parsed.error.errors });
     }
 
-    const { status, evidencePhoto } = parsed.data;
+    const { status, evidencePhoto, actualVolume, transportReport } = parsed.data;
 
     const pickup = await prisma.pickupRequest.findUnique({
       where: { id },
@@ -317,6 +333,8 @@ export async function updatePickupStatus(req: Request, res: Response) {
       data: {
         status,
         evidencePhoto,
+        actualVolume,
+        transportReport,
       },
     });
 
@@ -342,6 +360,64 @@ export async function updatePickupStatus(req: Request, res: Response) {
     return res.status(200).json({ success: true, pickup: updatedPickup });
   } catch (error) {
     console.error('Update pickup status error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+const assignTransporterSchema = z.object({
+  transporterId: z.string(),
+  transporterName: z.string()
+});
+
+export async function assignTransporter(req: Request, res: Response) {
+  try {
+    if (!req.user || req.user.role !== UserRole.ADMIN_DLH) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Admin DLH only' });
+    }
+
+    const { id } = req.params;
+    const parsed = assignTransporterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { transporterId, transporterName } = parsed.data;
+
+    const pickup = await prisma.pickupRequest.findUnique({ where: { id }, include: { company: true } });
+    if (!pickup) {
+      return res.status(404).json({ success: false, error: 'Pickup request not found' });
+    }
+
+    const updatedPickup = await prisma.pickupRequest.update({
+      where: { id },
+      data: {
+        transporterId,
+        transporterName,
+      },
+    });
+
+    // Write Audit Log and System Notifications
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Menugaskan pengangkut ${transporterName} untuk pickup ${id}`,
+      },
+    });
+
+    if (pickup.company.picId) {
+      await prisma.systemNotification.create({
+        data: {
+          title: 'Pengangkut Ditugaskan',
+          message: `Admin DLH telah menugaskan pengangkut ${transporterName} untuk menjemput limbah ${pickup.wasteType} Anda.`,
+          type: NotificationType.INFO,
+        },
+      });
+    }
+
+    return res.status(200).json({ success: true, pickup: updatedPickup });
+  } catch (error) {
+    console.error('Assign transporter error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }

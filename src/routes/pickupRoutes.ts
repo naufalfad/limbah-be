@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createPickup, getPickups, pricePickup, updatePickupStatus } from '../controllers/pickupController';
+import { createPickup, getPickups, pricePickup, updatePickupStatus, assignTransporter } from '../controllers/pickupController';
 import { requireAuth, requireRoles } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
 
@@ -18,6 +18,12 @@ router.patch(
   requireAuth,
   requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH, UserRole.PENGANGKUT),
   updatePickupStatus
+);
+router.patch(
+  '/:id/assign',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+  assignTransporter
 );
 
 export default router;

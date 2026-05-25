@@ -8,6 +8,7 @@ import wasteRoutes from './routes/wasteRoutes';
 import pickupRoutes from './routes/pickupRoutes';
 import invoiceRoutes from './routes/invoiceRoutes';
 import systemRoutes from './routes/systemRoutes';
+import inspectionRoutes from './routes/inspectionRoutes';
 
 const app = express();
 
@@ -20,6 +21,10 @@ app.use(cors({
 app.use(morgan('dev'));
 app.use(express.json());
 
+// Serve uploaded files statically — accessible at /uploads/companies/filename.pdf
+app.use('/uploads', express.static('uploads'));
+
+
 // Main Mount API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -27,6 +32,7 @@ app.use('/api/companies', companyRoutes);
 app.use('/api/waste', wasteRoutes);
 app.use('/api/pickups', pickupRoutes);
 app.use('/api/invoices', invoiceRoutes);
+app.use('/api/inspections', inspectionRoutes);
 app.use('/api', systemRoutes); // Notifications and audit-logs are mounted directly under /api
 
 // Error handler middleware

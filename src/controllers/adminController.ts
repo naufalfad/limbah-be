@@ -73,3 +73,26 @@ export async function createUser(req: Request, res: Response) {
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }
+
+export async function getTransporters(req: Request, res: Response) {
+  try {
+    if (!req.user || req.user.role !== UserRole.ADMIN_DLH) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Admin DLH only' });
+    }
+
+    const transporters = await prisma.user.findMany({
+      where: { role: UserRole.PENGANGKUT },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        transporterId: true,
+      }
+    });
+
+    return res.status(200).json({ success: true, transporters });
+  } catch (error) {
+    console.error('Get transporters error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
