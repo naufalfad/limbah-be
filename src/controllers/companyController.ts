@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient, CompanyStatus, DocType, UserRole, NotificationType } from '@prisma/client';
+import { PrismaClient, CompanyStatus, DocType, UserRole, NotificationType, InvoiceType, InvoiceStatus } from '@prisma/client';
 import { z } from 'zod';
 import PDFDocument from 'pdfkit';
 
@@ -185,6 +185,29 @@ export async function updateCompanyStatus(req: Request, res: Response) {
       data: { status },
     });
 
+    // Auto-generate invoice for certificate activation if approved
+    if (status === CompanyStatus.APPROVED && company.status !== CompanyStatus.APPROVED) {
+      const isUklUpl = updatedCompany.docType === DocType.UKL_UPL;
+      const invoiceType = isUklUpl ? InvoiceType.Retribusi_UKL_UPL : InvoiceType.Retribusi_SPPL;
+      const amount = isUklUpl ? 1500000 : 500000;
+
+      const existingInvoice = await prisma.invoice.findFirst({
+        where: { companyId: updatedCompany.id, type: invoiceType }
+      });
+
+      if (!existingInvoice) {
+        await prisma.invoice.create({
+          data: {
+            companyId: updatedCompany.id,
+            type: invoiceType,
+            amount: amount,
+            date: new Date().toISOString().split('T')[0],
+            status: InvoiceStatus.UNPAID
+          }
+        });
+      }
+    }
+
     // Notify the PIC of the company
     if (updatedCompany.picId) {
       const type = status === CompanyStatus.APPROVED ? NotificationType.SUCCESS : NotificationType.WARNING;
@@ -236,6 +259,20 @@ export async function downloadCertificatePdf(req: Request, res: Response) {
 
     if (company.status !== CompanyStatus.APPROVED) {
       return res.status(400).json({ success: false, error: 'Certificate not available yet' });
+    }
+
+    // Validas Pembayaran Retribusi (Wajib Lunas)
+    const isUklUpl = company.docType === DocType.UKL_UPL;
+    const requiredInvoiceType = isUklUpl ? InvoiceType.Retribusi_UKL_UPL : InvoiceType.Retribusi_SPPL;
+    const retribusiInvoice = await prisma.invoice.findFirst({
+      where: {
+        companyId: company.id,
+        type: requiredInvoiceType
+      }
+    });
+
+    if (!retribusiInvoice || retribusiInvoice.status !== InvoiceStatus.SETTLED) {
+      return res.status(403).json({ success: false, error: 'Payment Required: Harap lunasi tagihan retribusi untuk mengaktifkan sertifikat.' });
     }
 
     // Generate PDF
