@@ -1,0 +1,2924 @@
+=== STRUKTUR & ISI KODE (NODE.JS BACKEND MODE) ===
+
+
+--- FILE: .env ---
+PORT=5000
+DATABASE_URL="postgresql://postgres:123@localhost:5432/sijaga_db?schema=public"
+JWT_SECRET="sijaga_secret_key_extremely_secure_12345"
+
+--- FILE: .gitignore ---
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+.env
+recovered
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+
+--- FILE: package.json ---
+{
+  "name": "limbah-be",
+  "version": "1.0.0",
+  "description": "Backend Service for SIJAGA Lingkungan",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "prisma:migrate": "npx prisma migrate dev",
+    "prisma:seed": "npx ts-node prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.14.0",
+    "@types/multer": "^2.1.0",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^2.1.1",
+    "pdfkit": "^0.18.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^20.19.41",
+    "@types/pdfkit": "^0.17.6",
+    "prisma": "^5.14.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  }
+}
+
+
+--- FILE: prisma\schema.prisma ---
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN_DLH
+  PETUGAS_LAPANGAN
+  PERUSAHAAN
+  PENGANGKUT
+  AUDITOR
+}
+
+enum CompanyStatus {
+  PENDING
+  REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum DocType {
+  SPPL
+  UKL_UPL @map("UKL-UPL")
+}
+
+enum WasteLogStatus {
+  Terverifikasi
+  Proses_Verifikasi @map("Proses Verifikasi")
+  Terjadwal_Pickup @map("Terjadwal Pickup")
+  Ditolak
+}
+
+enum PickupStatus {
+  PENDING
+  PRICED
+  PAID
+  ON_THE_ROAD
+  LOADED
+  COMPLETED
+}
+
+enum InvoiceType {
+  Pengangkutan
+  Retribusi_SPPL @map("Retribusi SPPL")
+  Retribusi_UKL_UPL @map("Retribusi UKL-UPL")
+  Denda
+}
+
+enum InvoiceStatus {
+  UNPAID
+  ESCROW
+  SETTLED
+  REFUNDED
+}
+
+enum InspectionStatus {
+  Selesai
+  Terjadwal
+  Dibatalkan
+}
+
+enum NotificationType {
+  WARNING
+  INFO
+  SUCCESS
+  DANGER
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          UserRole
+  companyId     String?   // Keep for fallback compatibility
+  transporterId String?   // ID Pengangkut (opsional jika PENGANGKUT)
+  officerId     String?   // ID Petugas Lapangan (opsional jika PETUGAS_LAPANGAN)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  companies     Company[] @relation("UserCompanies")
+}
+
+model Company {
+  id               String        @id @default(uuid())
+  companyName      String
+  nib              String        @unique
+  npwp             String
+  picName          String
+  picPhone         String
+  picRole          String
+  investmentType   String        // PMDN / PMA
+  yearBuilt        String
+  buildingArea     Float
+  operationalHours String
+  rawMaterials     String
+  waterSource      String
+  powerSource      String
+  kbli             String
+  investment       Float
+  landArea         Float
+  employees        Int
+  lat              String
+  lng              String
+  address          String
+  docType          DocType
+  status           CompanyStatus @default(PENDING)
+  score            Float?        // ESG Score kepatuhan (0 - 100)
+  wasteInfo        String?
+  hasTps           Boolean       @default(false)
+  docNibUrl        String?       // Path/URL file scan NIB
+  docNpwpUrl       String?       // Path/URL file scan NPWP
+  docSiteplanUrl   String?       // Path/URL file Siteplan Layout (opsional)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  picId            String?
+  pic              User?         @relation("UserCompanies", fields: [picId], references: [id], onDelete: Cascade)
+
+  wasteLogs        WasteLog[]
+  pickupRequests   PickupRequest[]
+  invoices         Invoice[]
+  inspections      Inspection[]
+}
+
+model WasteLog {
+  id          String         @id @default(uuid())
+  companyId   String
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type        String         // Contoh: Oli Bekas, Limbah Cair Kimia, dll
+  volume      Float
+  unit        String         // L / kg / m³
+  date        String         // Format: YYYY-MM-DD
+  method      String         // Dinas / Mandiri
+  status      WasteLogStatus
+  note        String?
+  createdAt   DateTime       @default(now())
+}
+
+model PickupRequest {
+  id              String       @id @default(uuid())
+  companyId       String
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  wasteType       String
+  volume          String       // Contoh: "45 L"
+  date            String       // Format: YYYY-MM-DD
+  status          PickupStatus @default(PENDING)
+  transporterId   String?      // Contoh: "TRANS-001"
+  transporterName String?
+  cost            Float?       // Biaya pengangkutan (setelah dihitung otomatis atau diisi Admin DLH)
+  plateNo         String?
+  driverName      String?
+  evidencePhoto   String?
+  invoiceId       String?
+  address         String?
+  actualVolume    String?      // Laporan volume akhir dari transporter
+  transportReport String?      // Catatan laporan dari transporter
+  createdAt       DateTime     @default(now())
+}
+
+model Invoice {
+  id          String        @id @default(uuid())
+  companyId   String
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type        InvoiceType
+  amount      Float
+  date        String        // Format: YYYY-MM-DD
+  status      InvoiceStatus @default(UNPAID)
+  createdAt   DateTime      @default(now())
+}
+
+model Inspection {
+  id             String           @id @default(uuid())
+  companyId      String
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inspectorId    String
+  inspectorName  String
+  date           String           // Format: YYYY-MM-DD
+  score          Float?           // Nilai hasil inspeksi (0-100)
+  status         InspectionStatus @default(Terjadwal)
+  location       String
+  notes          String?
+  photo          String?
+  bapSigned      Boolean          @default(false)
+  
+  // Checklist item disimpan sebagai objek JSON
+  checklist      Json?            // Format: { tpsB3: boolean, ipal: boolean, apar: boolean, noise: boolean, safetyEquipment: boolean }
+  
+  createdAt      DateTime         @default(now())
+}
+
+model SystemNotification {
+  id        String           @id @default(uuid())
+  title     String
+  message   String
+  type      NotificationType
+  timestamp DateTime         @default(now())
+  read      Boolean          @default(false)
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  user      String
+  role      String
+  action    String
+}
+
+
+--- FILE: prisma\seed.ts ---
+import { PrismaClient, UserRole, CompanyStatus, DocType, WasteLogStatus, PickupStatus, InvoiceType, InvoiceStatus, InspectionStatus, NotificationType } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log('Clearing database...');
+  await prisma.auditLog.deleteMany();
+  await prisma.systemNotification.deleteMany();
+  await prisma.inspection.deleteMany();
+  await prisma.invoice.deleteMany();
+  await prisma.pickupRequest.deleteMany();
+  await prisma.wasteLog.deleteMany();
+  await prisma.company.deleteMany();
+  await prisma.user.deleteMany();
+
+  console.log('Seeding roles and users...');
+  const saltRounds = 10;
+
+  const superPassword = await bcrypt.hash('password123', saltRounds);
+  const adminPassword = await bcrypt.hash('password123', saltRounds);
+  const auditorPassword = await bcrypt.hash('password123', saltRounds);
+  const officerPassword = await bcrypt.hash('password123', saltRounds);
+  const budiPassword = await bcrypt.hash('password123', saltRounds);
+  const transporterPassword = await bcrypt.hash('password123', saltRounds);
+
+  const superAdmin = await prisma.user.create({
+    data: {
+      name: 'Super Administrator',
+      email: 'sa@geocitra.com',
+      password: superPassword,
+      role: UserRole.SUPER_ADMIN,
+    },
+  });
+
+  const adminDlh = await prisma.user.create({
+    data: {
+      name: 'Admin Verifikator DLH',
+      email: 'dlh@geocitra.com',
+      password: adminPassword,
+      role: UserRole.ADMIN_DLH,
+    },
+  });
+
+  const auditor = await prisma.user.create({
+    data: {
+      name: 'Kepala Dinas Lingkungan Hidup',
+      email: 'auditor@geocitra.com',
+      password: auditorPassword,
+      role: UserRole.AUDITOR,
+    },
+  });
+
+  const officer = await prisma.user.create({
+    data: {
+      name: 'Heryanto, S.T.',
+      email: 'petugas@geocitra.com',
+      password: officerPassword,
+      role: UserRole.PETUGAS_LAPANGAN,
+      officerId: 'OFF-001',
+    },
+  });
+
+  const budi = await prisma.user.create({
+    data: {
+      id: 'USER-005',
+      name: 'Budi (PT. Tekstil)',
+      email: 'user@geocitra.com',
+      password: budiPassword,
+      role: UserRole.PERUSAHAAN,
+      companyId: 'COM-001', // singular fallback
+    },
+  });
+
+  const transporter = await prisma.user.create({
+    data: {
+      name: 'PT. Transport Limbah Indonesia',
+      email: 'transporter@geocitra.com',
+      password: transporterPassword,
+      role: UserRole.PENGANGKUT,
+      // Hapus transporterId: 'TRANS-001' karena kita full migrasi ke UUID bawaan (id)
+    },
+  });
+
+  console.log('Seeding companies...');
+  const com1 = await prisma.company.create({
+    data: {
+      id: 'COM-001',
+      companyName: 'PT. Tekstil Sejahtera',
+      nib: '9120301294821',
+      npwp: '01.234.567.8-401.000',
+      picName: 'Budi',
+      picPhone: '081234567890',
+      picRole: 'Direktur Utama',
+      investmentType: 'PMDN',
+      yearBuilt: '2015',
+      buildingArea: 2500,
+      operationalHours: '08:00 - 17:00',
+      rawMaterials: 'Serat Kapas, Pewarna Tekstil',
+      waterSource: 'PDAM',
+      powerSource: 'PLN',
+      kbli: '13121',
+      investment: 6000000000, // 6 Billion -> UKL-UPL
+      landArea: 6000,
+      employees: 150,
+      lat: '-6.9147',
+      lng: '107.6098',
+      address: 'Jl. Rancaekek No. 12, Bandung',
+      docType: DocType.UKL_UPL,
+      status: CompanyStatus.APPROVED,
+      score: 85,
+      hasTps: true,
+      picId: budi.id,
+    },
+  });
+
+  const com2 = await prisma.company.create({
+    data: {
+      id: 'COM-002',
+      companyName: 'Bengkel Jaya Motor',
+      nib: '9120301294112',
+      npwp: '02.345.678.9-402.000',
+      picName: 'Budi',
+      picPhone: '081234567890',
+      picRole: 'Pemilik',
+      investmentType: 'PMDN',
+      yearBuilt: '2020',
+      buildingArea: 200,
+      operationalHours: '09:00 - 19:00',
+      rawMaterials: 'Sparepart Motor, Oli',
+      waterSource: 'Sumur Bor',
+      powerSource: 'PLN',
+      kbli: '45404',
+      investment: 300000000, // 300 Million -> SPPL
+      landArea: 300,
+      employees: 5,
+      lat: '-6.9034',
+      lng: '107.6189',
+      address: 'Jl. Suropati No. 45, Bandung',
+      docType: DocType.SPPL,
+      status: CompanyStatus.REVIEW,
+      picId: budi.id, // Budi owns this too!
+    },
+  });
+
+  const com3 = await prisma.company.create({
+    data: {
+      id: 'COM-003',
+      companyName: 'Restoran Sunda Nikmat',
+      nib: '9120301294553',
+      npwp: '03.456.789.0-403.000',
+      picName: 'Asep',
+      picPhone: '087823456789',
+      picRole: 'Manajer Operasional',
+      investmentType: 'PMDN',
+      yearBuilt: '2018',
+      buildingArea: 800,
+      operationalHours: '10:00 - 22:00',
+      rawMaterials: 'Bahan Pangan, Minyak Goreng',
+      waterSource: 'PDAM',
+      powerSource: 'PLN',
+      kbli: '56101',
+      investment: 1200000000, // 1.2 Billion -> SPPL
+      landArea: 1000,
+      employees: 24,
+      lat: '-6.8245',
+      lng: '107.6190',
+      address: 'Jl. Lembang No. 102, Bandung Barat',
+      docType: DocType.SPPL,
+      status: CompanyStatus.APPROVED,
+      score: 90,
+      picId: budi.id, // Budi owns this too to allow him to view in mock dashboard!
+    },
+  });
+
+  const com4 = await prisma.company.create({
+    data: {
+      id: 'COM-004',
+      companyName: 'Pabrik Kimia Farma',
+      nib: '9120301294001',
+      npwp: '01.111.222.3-401.000',
+      picName: 'Rudi',
+      picPhone: '081122334455',
+      picRole: 'Kepala Pabrik',
+      investmentType: 'PMA',
+      yearBuilt: '2005',
+      buildingArea: 15000,
+      operationalHours: '24 Jam',
+      rawMaterials: 'Bahan Baku Farmasi',
+      waterSource: 'PDAM & Deep Well',
+      powerSource: 'PLN & Generator',
+      kbli: '21012',
+      investment: 45000000000, // 45 Billion -> UKL-UPL
+      landArea: 20000,
+      employees: 500,
+      lat: '-6.9388',
+      lng: '107.6255',
+      address: 'Kawasan Industri Gede Bage, Bandung',
+      docType: DocType.UKL_UPL,
+      status: CompanyStatus.APPROVED,
+      score: 65,
+      hasTps: true,
+    },
+  });
+
+  console.log('Seeding waste logs...');
+  await prisma.wasteLog.create({
+    data: {
+      companyId: com2.id,
+      type: 'Oli Bekas',
+      volume: 45,
+      unit: 'L',
+      date: '2026-05-15',
+      method: 'Dinas',
+      status: WasteLogStatus.Terverifikasi,
+      note: 'Rutin bulanan bengkel',
+    },
+  });
+
+  await prisma.wasteLog.create({
+    data: {
+      companyId: com1.id,
+      type: 'Limbah Cair Kimia',
+      volume: 120,
+      unit: 'm³',
+      date: '2026-05-18',
+      method: 'Mandiri',
+      status: WasteLogStatus.Proses_Verifikasi,
+      note: 'Hasil netralisasi IPAL',
+    },
+  });
+
+  await prisma.wasteLog.create({
+    data: {
+      companyId: com3.id,
+      type: 'Minyak Jelantah',
+      volume: 15,
+      unit: 'L',
+      date: '2026-05-19',
+      method: 'Dinas',
+      status: WasteLogStatus.Terjadwal_Pickup,
+      note: 'Limbah dapur restoran',
+    },
+  });
+
+  console.log('Seeding pickups and invoices...');
+  // Pickup & Invoice 1 (Settled direct billing)
+  const pick1 = await prisma.pickupRequest.create({
+    data: {
+      id: 'PICK-001',
+      companyId: com2.id,
+      wasteType: 'Oli Bekas',
+      volume: '45 L',
+      date: '2026-05-15',
+      status: PickupStatus.PAID,
+      transporterId: transporter.id,
+      transporterName: transporter.name,
+      cost: 450000,
+      plateNo: 'D 9901 AB',
+      driverName: 'Supriadi',
+      invoiceId: 'INV-001',
+      address: com2.address,
+    },
+  });
+
+  await prisma.invoice.create({
+    data: {
+      id: 'INV-001',
+      companyId: com2.id,
+      type: InvoiceType.Pengangkutan,
+      amount: 450000,
+      date: '2026-05-15',
+      status: InvoiceStatus.SETTLED,
+    },
+  });
+
+  // Pickup & Invoice 2 (Unpaid, transporter priced)
+  const pick2 = await prisma.pickupRequest.create({
+    data: {
+      id: 'PICK-002',
+      companyId: com3.id,
+      wasteType: 'Minyak Jelantah',
+      volume: '15 L',
+      date: '2026-05-19',
+      status: PickupStatus.PRICED,
+      transporterId: transporter.id,
+      transporterName: transporter.name,
+      cost: 150000,
+      plateNo: 'D 8812 XY',
+      driverName: 'Mulyono',
+      invoiceId: 'INV-003',
+      address: com3.address,
+    },
+  });
+
+  await prisma.invoice.create({
+    data: {
+      id: 'INV-003',
+      companyId: com3.id,
+      type: InvoiceType.Pengangkutan,
+      amount: 150000,
+      date: '2026-05-19',
+      status: InvoiceStatus.UNPAID,
+    },
+  });
+
+  console.log('Seeding inspections...');
+  // Completed inspection
+  await prisma.inspection.create({
+    data: {
+      companyId: com1.id,
+      inspectorId: 'OFF-001',
+      inspectorName: 'Heryanto, S.T.',
+      date: '2026-05-10',
+      score: 85,
+      status: InspectionStatus.Selesai,
+      location: com1.address,
+      notes: 'TPS B3 dan IPAL berfungsi dengan baik. APAR tersedia lengkap.',
+      bapSigned: true,
+      checklist: {
+        tpsB3: true,
+        ipal: true,
+        apar: true,
+        noise: false,
+        safetyEquipment: true,
+      },
+    },
+  });
+
+  // Scheduled inspection
+  await prisma.inspection.create({
+    data: {
+      companyId: com2.id,
+      inspectorId: 'OFF-001',
+      inspectorName: 'Heryanto, S.T.',
+      date: '2026-05-25',
+      status: InspectionStatus.Terjadwal,
+      location: com2.address,
+      notes: 'Pemeriksaan kelayakan TPS B3 skala mikro.',
+    },
+  });
+
+  console.log('Seeding system notifications & audit logs...');
+  await prisma.systemNotification.create({
+    data: {
+      title: 'Dokumen Lingkungan Baru Masuk',
+      message: 'Perusahaan PT. Tekstil Maju mendaftarkan izin lingkungan baru.',
+      type: NotificationType.INFO,
+    },
+  });
+
+  await prisma.systemNotification.create({
+    data: {
+      title: 'EWS: Kapasitas Berlebih',
+      message: 'Limbah cair kimia di PT. Tekstil Sejahtera melebihi ambang batas toleransi.',
+      type: NotificationType.DANGER,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      user: 'admin@dlh.go.id',
+      role: 'ADMIN_DLH',
+      action: 'Mengevaluasi dokumen lingkungan COM-001',
+    },
+  });
+
+  console.log('Database seeding complete successfully!');
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
+
+
+--- FILE: src\app.ts ---
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
+import morgan from 'morgan';
+import authRoutes from './routes/authRoutes';
+import adminRoutes from './routes/adminRoutes';
+import companyRoutes from './routes/companyRoutes';
+import wasteRoutes from './routes/wasteRoutes';
+import pickupRoutes from './routes/pickupRoutes';
+import invoiceRoutes from './routes/invoiceRoutes';
+import systemRoutes from './routes/systemRoutes';
+import inspectionRoutes from './routes/inspectionRoutes';
+import analyticsRoutes from './routes/analyticsRoutes'; // IMPOR BARU: Mengimpor router analitik eksekutif
+
+const app = express();
+
+// Middlewares
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000'], // React default and secondary port
+  credentials: true,
+}));
+
+app.use(morgan('dev'));
+app.use(express.json());
+
+// Serve uploaded files statically — accessible at /uploads/companies/filename.pdf
+app.use('/uploads', express.static('uploads'));
+
+
+// Main Mount API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/companies', companyRoutes);
+app.use('/api/waste', wasteRoutes);
+app.use('/api/pickups', pickupRoutes);
+app.use('/api/invoices', invoiceRoutes);
+app.use('/api/inspections', inspectionRoutes);
+app.use('/api/analytics', analyticsRoutes); // MOUNT BARU: Mendaftarkan API analitik eksekutif di bawah /api/analytics
+app.use('/api', systemRoutes); // Notifications and audit-logs are mounted directly under /api
+
+// Error handler middleware
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('Express Error Handler:', err);
+  return res.status(err.status || 500).json({
+    success: false,
+    error: err.message || 'Internal server error',
+  });
+});
+
+export default app;
+
+--- FILE: src\controllers\adminController.ts ---
+import { Request, Response } from 'express';
+import { PrismaClient, UserRole } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import { z } from 'zod';
+
+const prisma = new PrismaClient();
+
+const createUserSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(6),
+  role: z.nativeEnum(UserRole),
+  transporterId: z.string().optional(),
+  officerId: z.string().optional(),
+  companyId: z.string().optional(),
+});
+
+const updateRoleSchema = z.object({
+  role: z.nativeEnum(UserRole),
+});
+
+export async function createUser(req: Request, res: Response) {
+  try {
+    const parsed = createUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { name, email, password, role, transporterId, officerId, companyId } = parsed.data;
+
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'Email already registered' });
+    }
+
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        transporterId,
+        officerId,
+        companyId,
+      },
+    });
+
+    // Write audit log
+    if (req.user) {
+      await prisma.auditLog.create({
+        data: {
+          user: req.user.email,
+          role: req.user.role,
+          action: `Membuat akun user baru: ${email} (${role})`,
+        },
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        transporterId: newUser.transporterId,
+        officerId: newUser.officerId,
+        companyId: newUser.companyId,
+      },
+    });
+  } catch (error) {
+    console.error('Create user error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function getTransporters(req: Request, res: Response) {
+  try {
+    // FIX: Menggunakan logika operator !== untuk menghindari strict-type error TypeScript pada array.includes
+    if (!req.user || (req.user.role !== UserRole.ADMIN_DLH && req.user.role !== UserRole.SUPER_ADMIN)) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Insufficient privileges' });
+    }
+
+    const transporters = await prisma.user.findMany({
+      where: { role: UserRole.PENGANGKUT },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        transporterId: true,
+      }
+    });
+
+    return res.status(200).json({ success: true, transporters });
+  } catch (error) {
+    console.error('Get transporters error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+// FUNGSI BARU: Mengambil semua data pengguna untuk dashboard Super Admin
+export async function getAllUsers(req: Request, res: Response) {
+  try {
+    // Keamanan Privasi: Batasi field yang di-select agar password tidak bocor ke FE
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        companyId: true,
+        transporterId: true,
+        officerId: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return res.status(200).json({ success: true, users });
+  } catch (error) {
+    console.error('Get all users error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+// FUNGSI BARU: Memperbarui Role Pengguna
+export async function updateUserRole(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const parsed = updateRoleSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { role } = parsed.data;
+
+    // Cek apakah pengguna yang dituju ada di database
+    const targetUser = await prisma.user.findUnique({ where: { id } });
+    if (!targetUser) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Lakukan update (tanpa menyentuh relasi companyId/officerId untuk mencegah data loss)
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: { role },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      }
+    });
+
+    // Otomatis catat jejak modifikasi ke dalam Audit Log
+    if (req.user) {
+      await prisma.auditLog.create({
+        data: {
+          user: req.user.email,
+          role: req.user.role,
+          action: `Mengubah hak akses (role) ${targetUser.email} menjadi ${role}`,
+        },
+      });
+    }
+
+    return res.status(200).json({ success: true, user: updatedUser });
+  } catch (error) {
+    console.error('Update user role error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+--- FILE: src\controllers\analyticsController.ts ---
+import { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+/**
+ * Menghitung KPI Eksekutif, Tren Limbah Mingguan, 
+ * dan Distribusi Kepatuhan Spasial untuk Pimpinan (Auditor).
+ */
+export async function getExecutiveAnalytics(req: Request, res: Response) {
+    try {
+        // 1. Hitung Total Usaha Aktif Terdaftar (Approved)
+        const totalCompanies = await prisma.company.count({
+            where: { status: 'APPROVED' }
+        });
+
+        // 2. Hitung Rata-rata Skor Kepatuhan ESG Daerah
+        const avgEsgResult = await prisma.company.aggregate({
+            where: { status: 'APPROVED' },
+            _avg: { score: true }
+        });
+        const averageEsg = avgEsgResult._avg.score ? parseFloat(avgEsgResult._avg.score.toFixed(1)) : 0;
+
+        // 3. Hitung Delta Kepatuhan Bulan Ini vs Bulan Lalu (Berdasarkan Skor Inspeksi Selesai)
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+        const prevMonth = String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0');
+        const prevYear = now.getMonth() === 0 ? currentYear - 1 : currentYear;
+
+        const currentMonthPrefix = `${currentYear}-${currentMonth}`; // Format: YYYY-MM
+        const prevMonthPrefix = `${prevYear}-${prevMonth}`;
+
+        const currentMonthAvg = await prisma.inspection.aggregate({
+            where: { status: 'Selesai', date: { startsWith: currentMonthPrefix } },
+            _avg: { score: true }
+        });
+        const prevMonthAvg = await prisma.inspection.aggregate({
+            where: { status: 'Selesai', date: { startsWith: prevMonthPrefix } },
+            _avg: { score: true }
+        });
+
+        const currentAvg = currentMonthAvg._avg.score || 0;
+        const prevAvg = prevMonthAvg._avg.score || 0;
+
+        // Perhitungan Delta (%) MoM
+        const esgDelta = prevAvg > 0
+            ? parseFloat((((currentAvg - prevAvg) / prevAvg) * 100).toFixed(1))
+            : 0;
+
+        // 4. Hitung Akumulasi Total Volume Limbah B3 Terangkut
+        // Kategori B3 diidentifikasi jika tipe limbah mengandung "B3", "Oli", atau "Kimia"
+        const totalB3Result = await prisma.wasteLog.aggregate({
+            where: {
+                OR: [
+                    { type: { contains: 'B3', mode: 'insensitive' } },
+                    { type: { contains: 'Oli', mode: 'insensitive' } },
+                    { type: { contains: 'Kimia', mode: 'insensitive' } }
+                ]
+            },
+            _sum: { volume: true }
+        });
+        const totalWasteB3 = totalB3Result._sum.volume || 0;
+
+        // 5. Hitung Keuangan: Realisasi Retribusi Masuk (Settled) vs Nunggak (Unpaid)
+        const invoicesSum = await prisma.invoice.groupBy({
+            by: ['status'],
+            _sum: { amount: true }
+        });
+        const totalRevenue = invoicesSum.find(i => i.status === 'SETTLED')?._sum.amount || 0;
+        const unpaidRevenue = invoicesSum.find(i => i.status === 'UNPAID')?._sum.amount || 0;
+
+        // 6. Poligon/Chart Mingguan: Tren Volume Limbah B3 7 Hari Terakhir (Time-Series)
+        const weeklyWasteChart: { date: string; volume: number }[] = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dateStr = d.toISOString().split('T')[0];
+            weeklyWasteChart.push({ date: dateStr, volume: 0 });
+        }
+
+        const startDateStr = weeklyWasteChart[0].date;
+        const rawWasteLogs = await prisma.wasteLog.groupBy({
+            by: ['date'],
+            where: {
+                date: { gte: startDateStr },
+                OR: [
+                    { type: { contains: 'B3', mode: 'insensitive' } },
+                    { type: { contains: 'Oli', mode: 'insensitive' } },
+                    { type: { contains: 'Kimia', mode: 'insensitive' } }
+                ]
+            },
+            _sum: { volume: true }
+        });
+
+        rawWasteLogs.forEach(log => {
+            const match = weeklyWasteChart.find(item => item.date === log.date);
+            if (match) {
+                match.volume = log._sum.volume || 0;
+            }
+        });
+
+        // 7. Distribusi Zona Kepatuhan Spasial (Peta Legenda)
+        const approvedCompanies = await prisma.company.findMany({
+            where: { status: 'APPROVED', score: { not: null } },
+            select: { score: true }
+        });
+
+        let sangatPatuh = 0; // >= 80
+        let cukupPatuh = 0;  // 60-79
+        let kritis = 0;      // < 60
+
+        approvedCompanies.forEach(c => {
+            const score = c.score || 0;
+            if (score >= 80) sangatPatuh++;
+            else if (score >= 60) cukupPatuh++;
+            else kritis++;
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                totalCompanies,
+                averageEsg,
+                esgDelta,
+                totalWasteB3,
+                totalRevenue,
+                unpaidRevenue,
+                weeklyWasteChart,
+                distribution: { sangatPatuh, cukupPatuh, kritis }
+            }
+        });
+    } catch (error) {
+        console.error('Get executive analytics error:', error);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+}
+
+/**
+ * Menghitung KPI Kinerja Operasional DLH, Bottleneck Pengawasan,
+ * dan Log Inspeksi Terkini.
+ */
+export async function getPerformanceAnalytics(req: Request, res: Response) {
+    try {
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // 1. Hitung Dokumen Menunggu Tinjauan (Pending / Review)
+        const pendingApprovals = await prisma.company.count({
+            where: { status: { in: ['PENDING', 'REVIEW'] } }
+        });
+
+        // 2. Hitung Total Inspeksi Selesai
+        const completedInspections = await prisma.inspection.count({
+            where: { status: 'Selesai' }
+        });
+
+        // 3. Hitung Sidak Jatuh Tempo (Terjadwal tapi tanggal sudah terlampaui hari ini)
+        const overdueInspections = await prisma.inspection.count({
+            where: {
+                status: 'Terjadwal',
+                date: { lt: todayStr }
+            }
+        });
+
+        // 4. Ambil 5 Laporan Inspeksi Terakhir (Log Kunjungan)
+        const rawInspections = await prisma.inspection.findMany({
+            take: 5,
+            orderBy: { date: 'desc' },
+            include: {
+                company: {
+                    select: { companyName: true }
+                }
+            }
+        });
+
+        const recentInspections = rawInspections.map(i => ({
+            id: i.id,
+            companyId: i.companyId,
+            companyName: i.company?.companyName || 'Unknown Company',
+            inspectorId: i.inspectorId,
+            inspectorName: i.inspectorName,
+            date: i.date,
+            score: i.score,
+            status: i.status,
+            location: i.location,
+            notes: i.notes
+        }));
+
+        // 5. Komposisi Jenis Dokumen Terdaftar (SPPL vs UKL-UPL)
+        const docTypes = await prisma.company.groupBy({
+            by: ['docType'],
+            _count: { id: true }
+        });
+
+        const ssplCount = docTypes.find(d => d.docType === 'SPPL')?._count.id || 0;
+        const uklUplCount = docTypes.find(d => d.docType === 'UKL_UPL')?._count.id || 0;
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                pendingApprovals,
+                completedInspections,
+                overdueInspections,
+                recentInspections,
+                documentComposition: {
+                    sppl: ssplCount,
+                    uklUpl: uklUplCount
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Get performance analytics error:', error);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+}
+
+--- FILE: src\controllers\authController.ts ---
+import { Request, Response } from 'express';
+import { PrismaClient, UserRole } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import * as jwt from 'jsonwebtoken';
+import { z } from 'zod';
+
+const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'sijaga_secret_key_extremely_secure_12345';
+
+const registerSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(6),
+});
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string(),
+  role: z.nativeEnum(UserRole).optional(),
+});
+
+export async function register(req: Request, res: Response) {
+  try {
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { name, email, password } = parsed.data;
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'Email already registered' });
+    }
+
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role: UserRole.PERUSAHAAN,
+      },
+    });
+
+    const token = jwt.sign(
+      { id: newUser.id, email: newUser.email, role: newUser.role },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        user: newUser.email,
+        role: newUser.role,
+        action: 'Mendaftar PIC Perusahaan Baru',
+      },
+    });
+
+    return res.status(201).json({
+      success: true,
+      token,
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        companies: [],
+        companyId: null,
+      },
+    });
+  } catch (error: any) {
+    console.error('Registration error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function login(req: Request, res: Response) {
+  try {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { email, password, role } = parsed.data;
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        companies: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Invalid email or password' });
+    }
+
+    // Compare passwords
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!passwordMatch) {
+      return res.status(401).json({ success: false, error: 'Invalid email or password' });
+    }
+
+    // Match role (only if explicitly provided)
+    if (role && user.role !== role) {
+      return res.status(403).json({ success: false, error: 'Role mismatch' });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Fallback company ID compatibility
+    const fallbackCompanyId = user.companies.length > 0 ? user.companies[0].id : null;
+
+    // Log to audit log
+    await prisma.auditLog.create({
+      data: {
+        user: user.email,
+        role: user.role,
+        action: 'Melakukan login sistem',
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        transporterId: user.transporterId,
+        officerId: user.officerId,
+        companies: user.companies,
+        companyId: user.companyId || fallbackCompanyId,
+      },
+    });
+  } catch (error: any) {
+    console.error('Login error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function logout(req: Request, res: Response) {
+  try {
+    if (req.user) {
+      await prisma.auditLog.create({
+        data: {
+          user: req.user.email,
+          role: req.user.role,
+          action: 'Melakukan logout sistem',
+        },
+      });
+    }
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+
+--- FILE: src\controllers\companyController.ts ---
+import { Request, Response } from 'express';
+import { PrismaClient, CompanyStatus, DocType, UserRole, NotificationType, InvoiceType, InvoiceStatus } from '@prisma/client';
+import { z } from 'zod';
+import PDFDocument from 'pdfkit';
+
+const prisma = new PrismaClient();
+
+// Zod schema using coerce for numeric fields that come as strings from FormData
+const createCompanySchema = z.object({
+  companyName: z.string().min(2),
+  nib: z.string().min(5),
+  npwp: z.string().min(5),
+  picName: z.string().min(2),
+  picPhone: z.string().min(5),
+  picRole: z.string().min(2),
+  investmentType: z.string(),
+  yearBuilt: z.string(),
+  buildingArea: z.coerce.number().nonnegative(),
+  operationalHours: z.string(),
+  rawMaterials: z.string(),
+  waterSource: z.string(),
+  powerSource: z.string(),
+  kbli: z.string(),
+  investment: z.coerce.number().nonnegative(),
+  landArea: z.coerce.number().nonnegative(),
+  employees: z.coerce.number().int().nonnegative(),
+  lat: z.string(),
+  lng: z.string(),
+  address: z.string(),
+  wasteInfo: z.string().optional(),
+  hasTps: z.preprocess((v) => v === 'true' || v === true, z.boolean()).optional(),
+});
+
+export async function createCompany(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const parsed = createCompanySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const data = parsed.data;
+
+    // Smart Assessment for environmental document category
+    const docType = (data.investment >= 5000000000 || data.landArea >= 5000)
+      ? DocType.UKL_UPL
+      : DocType.SPPL;
+
+    // Extract uploaded file paths from Multer (req.files is keyed by field name)
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const docNibUrl = files?.['nibDoc']?.[0]
+      ? `/uploads/companies/${files['nibDoc'][0].filename}`
+      : null;
+    const docNpwpUrl = files?.['npwpDoc']?.[0]
+      ? `/uploads/companies/${files['npwpDoc'][0].filename}`
+      : null;
+    const docSiteplanUrl = files?.['siteplanDoc']?.[0]
+      ? `/uploads/companies/${files['siteplanDoc'][0].filename}`
+      : null;
+
+    const company = await prisma.company.create({
+      data: {
+        ...data,
+        docType,
+        status: CompanyStatus.PENDING,
+        picId: req.user.id,
+        ...(docNibUrl && { docNibUrl }),
+        ...(docNpwpUrl && { docNpwpUrl }),
+        ...(docSiteplanUrl && { docSiteplanUrl }),
+      },
+    });
+
+    // Create system notification for Admin DLH
+    await prisma.systemNotification.create({
+      data: {
+        title: 'Registrasi Perusahaan Baru',
+        message: `Perusahaan ${company.companyName} telah didaftarkan dan memerlukan verifikasi dokumen ${docType}.`,
+        type: NotificationType.INFO,
+      },
+    });
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Mendaftarkan perusahaan baru: ${company.companyName} (${company.id})`,
+      },
+    });
+
+    return res.status(201).json({ success: true, company });
+  } catch (error: any) {
+    console.error('Create company error:', error);
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, error: 'NIB already registered' });
+    }
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function getCompanies(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    let filter = {};
+    if (req.user.role === UserRole.PERUSAHAAN) {
+      // Multi-tenant isolation for PIC
+      filter = { picId: req.user.id };
+    }
+
+    const companies = await prisma.company.findMany({
+      where: filter,
+      include: {
+        pic: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    return res.status(200).json({ success: true, companies });
+  } catch (error) {
+    console.error('Get companies error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function getCompanyById(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+
+    const company = await prisma.company.findUnique({
+      where: { id },
+      include: {
+        pic: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    // Strict ownership validation for PERUSAHAAN role
+    if (req.user.role === UserRole.PERUSAHAAN && company.picId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You do not own this company' });
+    }
+
+    return res.status(200).json({ success: true, company });
+  } catch (error) {
+    console.error('Get company by id error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function updateCompanyStatus(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!Object.values(CompanyStatus).includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid status value' });
+    }
+
+    const company = await prisma.company.findUnique({ where: { id } });
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    const updatedCompany = await prisma.company.update({
+      where: { id },
+      data: { status },
+    });
+
+    // Auto-generate invoice for certificate activation if approved
+    if (status === CompanyStatus.APPROVED && company.status !== CompanyStatus.APPROVED) {
+      const isUklUpl = updatedCompany.docType === DocType.UKL_UPL;
+      const invoiceType = isUklUpl ? InvoiceType.Retribusi_UKL_UPL : InvoiceType.Retribusi_SPPL;
+      const amount = isUklUpl ? 1500000 : 500000;
+
+      const existingInvoice = await prisma.invoice.findFirst({
+        where: { companyId: updatedCompany.id, type: invoiceType }
+      });
+
+      if (!existingInvoice) {
+        await prisma.invoice.create({
+          data: {
+            companyId: updatedCompany.id,
+            type: invoiceType,
+            amount: amount,
+            date: new Date().toISOString().split('T')[0],
+            status: InvoiceStatus.UNPAID
+          }
+        });
+      }
+    }
+
+    // Notify the PIC of the company
+    if (updatedCompany.picId) {
+      const type = status === CompanyStatus.APPROVED ? NotificationType.SUCCESS : NotificationType.WARNING;
+      await prisma.systemNotification.create({
+        data: {
+          title: `Status Dokumen Lingkungan ${status}`,
+          message: `Dokumen lingkungan untuk perusahaan ${updatedCompany.companyName} telah diubah menjadi ${status}.`,
+          type,
+        },
+      });
+    }
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Mengubah status perusahaan ${updatedCompany.companyName} (${id}) menjadi ${status}`,
+      },
+    });
+
+    return res.status(200).json({ success: true, company: updatedCompany });
+  } catch (error) {
+    console.error('Update company status error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function downloadCertificatePdf(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+
+    const company = await prisma.company.findUnique({
+      where: { id },
+    });
+
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    // Strict ownership validation for PERUSAHAAN role
+    if (req.user.role === UserRole.PERUSAHAAN && company.picId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You do not own this company' });
+    }
+
+    if (company.status !== CompanyStatus.APPROVED) {
+      return res.status(400).json({ success: false, error: 'Certificate not available yet' });
+    }
+
+    // Validas Pembayaran Retribusi (Wajib Lunas)
+    const isUklUpl = company.docType === DocType.UKL_UPL;
+    const requiredInvoiceType = isUklUpl ? InvoiceType.Retribusi_UKL_UPL : InvoiceType.Retribusi_SPPL;
+    const retribusiInvoice = await prisma.invoice.findFirst({
+      where: {
+        companyId: company.id,
+        type: requiredInvoiceType
+      }
+    });
+
+    if (!retribusiInvoice || retribusiInvoice.status !== InvoiceStatus.SETTLED) {
+      return res.status(403).json({ success: false, error: 'Payment Required: Harap lunasi tagihan retribusi untuk mengaktifkan sertifikat.' });
+    }
+
+    // Generate PDF
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Sertifikat_${company.companyName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`);
+
+    doc.pipe(res);
+
+    // PDF Content (Official Layout)
+    doc.fontSize(16).font('Helvetica-Bold').text('PEMERINTAH KABUPATEN / KOTA BANDUNG', { align: 'center' });
+    doc.fontSize(20).text('DINAS LINGKUNGAN HIDUP', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(10).font('Helvetica').text('Sertifikat Registrasi Lingkungan Digital', { align: 'center', characterSpacing: 2 });
+    doc.moveDown(1);
+    
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown(2);
+
+    doc.fontSize(14).font('Helvetica-Bold').text('SURAT BUKTI REGISTRASI LINGKUNGAN', { align: 'center', underline: true });
+    doc.fontSize(10).font('Helvetica').text(`Nomor: REG/LH/${company.nib}/${new Date().getFullYear()}`, { align: 'center' });
+    doc.moveDown(2);
+
+    doc.fontSize(11).text('Berdasarkan Undang-Undang Perlindungan dan Pengelolaan Lingkungan Hidup, Dinas Lingkungan Hidup menyatakan bahwa pelaku usaha di bawah ini:', { align: 'justify' });
+    doc.moveDown(1);
+
+    const startX = 50;
+    const valueX = 200;
+
+    const drawRow = (label: string, value: string) => {
+      doc.font('Helvetica-Bold').text(label, startX, doc.y, { width: 140 });
+      doc.font('Helvetica').text(`: ${value}`, valueX, doc.y - doc.currentLineHeight());
+      doc.moveDown(0.5);
+    };
+
+    drawRow('Nama Perusahaan', company.companyName);
+    drawRow('Nomor Induk Berusaha', company.nib);
+    drawRow('Alamat Usaha', company.address);
+    drawRow('Dokumen Lingkungan', `${company.docType} (Rekomendasi Penapisan)`);
+    
+    doc.moveDown(2);
+    doc.font('Helvetica').text('Telah terdaftar dalam sistem pengawasan lingkungan PANTAU LIMBAH dengan kewajiban melakukan pelaporan logbook limbah berkala, mematuhi parameter kepatuhan TPS B3, dan bersedia dilakukan inspeksi berkala.', { align: 'justify' });
+
+    doc.moveDown(4);
+
+    const sigX = 300;
+    doc.fontSize(10).font('Helvetica-Bold').text('Kepala Dinas Lingkungan Hidup', sigX, doc.y, { align: 'center', width: 245 });
+    doc.moveDown(4);
+    doc.fontSize(11).font('Helvetica-Bold').text('Dr. Ir. H. Ahmad Heryawan, M.Si.', sigX, doc.y, { align: 'center', underline: true, width: 245 });
+    doc.fontSize(9).font('Helvetica').text('NIP. 19720315 199803 1 002', sigX, doc.y, { align: 'center', width: 245 });
+
+    doc.end();
+
+  } catch (error) {
+    console.error('Download certificate error:', error);
+    if (!res.headersSent) {
+      return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  }
+}
+
+
+--- FILE: src\controllers\inspectionController.ts ---
+import { Request, Response } from 'express';
+import { PrismaClient, InspectionStatus, UserRole, NotificationType } from '@prisma/client';
+import { z } from 'zod';
+
+const prisma = new PrismaClient();
+
+const createInspectionSchema = z.object({
+  companyId: z.string(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  inspectorId: z.string(),
+  inspectorName: z.string().min(2),
+  location: z.string(),
+  notes: z.string().optional(),
+});
+
+const submitInspectionSchema = z.object({
+  score: z.number().min(0).max(100),
+  notes: z.string().optional(),
+  checklist: z.object({
+    tpsB3: z.boolean(),
+    ipal: z.boolean(),
+    apar: z.boolean(),
+    noise: z.boolean(),
+    safetyEquipment: z.boolean(),
+  }),
+});
+
+export async function createInspection(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const parsed = createInspectionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { companyId, date, inspectorId, inspectorName, location, notes } = parsed.data;
+
+    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    const inspection = await prisma.inspection.create({
+      data: {
+        companyId,
+        date,
+        inspectorId,
+        inspectorName,
+        location,
+        notes,
+        status: InspectionStatus.Terjadwal,
+      },
+    });
+
+    // Notify company PIC
+    if (company.picId) {
+      await prisma.systemNotification.create({
+        data: {
+          title: 'Jadwal Inspeksi Baru',
+          message: `Inspeksi lapangan dijadwalkan untuk perusahaan ${company.companyName} pada tanggal ${date}.`,
+          type: NotificationType.INFO,
+        },
+      });
+    }
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Menjadwalkan inspeksi baru untuk ${company.companyName} (${date})`,
+      },
+    });
+
+    return res.status(201).json({ success: true, inspection });
+  } catch (error) {
+    console.error('Create inspection error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function getInspections(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    let filter: any = {};
+    if (req.user.role === UserRole.PERUSAHAAN) {
+      filter.company = { picId: req.user.id };
+    }
+
+    const inspections = await prisma.inspection.findMany({
+      where: filter,
+      include: {
+        company: {
+          select: { id: true, companyName: true }
+        }
+      },
+      orderBy: { date: 'desc' }
+    });
+
+    return res.status(200).json({ success: true, inspections });
+  } catch (error) {
+    console.error('Get inspections error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function submitInspection(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const parsed = submitInspectionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { score, notes, checklist } = parsed.data;
+
+    const inspection = await prisma.inspection.findUnique({
+      where: { id },
+      include: { company: true }
+    });
+
+    if (!inspection) {
+      return res.status(404).json({ success: false, error: 'Inspection not found' });
+    }
+
+    // Update inspection details
+    const updatedInspection = await prisma.inspection.update({
+      where: { id },
+      data: {
+        score,
+        notes,
+        checklist,
+        status: InspectionStatus.Selesai,
+        bapSigned: true,
+        // Override inspector UUID and Name to whoever actually submitted the audit
+        inspectorId: req.user.id,
+        inspectorName: req.user.name,
+      },
+    });
+
+    // Compliance Sync: Update the company's ESG score
+    await prisma.company.update({
+      where: { id: inspection.companyId },
+      data: { score }
+    });
+
+    // EWS Warning: If score < 60, send danger alert
+    if (score < 60) {
+      await prisma.systemNotification.create({
+        data: {
+          title: 'EWS: Tingkat Kepatuhan Kritis',
+          message: `Hasil inspeksi di ${inspection.company.companyName} menujukkan skor kritis (${score}/100).`,
+          type: NotificationType.WARNING,
+        },
+      });
+    } else {
+      // Regular success notification
+      await prisma.systemNotification.create({
+        data: {
+          title: 'Hasil Evaluasi Kepatuhan',
+          message: `Inspeksi selesai di ${inspection.company.companyName} dengan skor kepatuhan ${score}/100.`,
+          type: NotificationType.SUCCESS,
+        },
+      });
+    }
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Mengirimkan hasil BAP inspeksi ${id} untuk ${inspection.company.companyName} dengan nilai ${score}`,
+      },
+    });
+
+    return res.status(200).json({ success: true, inspection: updatedInspection });
+  } catch (error) {
+    console.error('Submit inspection error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+
+--- FILE: src\controllers\pickupController.ts ---
+import { Request, Response } from 'express';
+import { PrismaClient, PickupStatus, InvoiceStatus, InvoiceType, UserRole, NotificationType } from '@prisma/client';
+import { z } from 'zod';
+
+const prisma = new PrismaClient();
+
+const createPickupSchema = z.object({
+  companyId: z.string(),
+  wasteType: z.string().min(2),
+  volume: z.string(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  address: z.string().min(5),
+});
+
+const pricePickupSchema = z.object({
+  cost: z.number().positive(),
+  driverName: z.string().min(2),
+  plateNo: z.string().min(3),
+});
+
+const updateStatusSchema = z.object({
+  status: z.enum([PickupStatus.ON_THE_ROAD, PickupStatus.LOADED, PickupStatus.COMPLETED]),
+  evidencePhoto: z.string().optional(),
+  actualVolume: z.string().optional(),
+  transportReport: z.string().optional(),
+});
+
+export async function createPickup(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const parsed = createPickupSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { companyId, wasteType, volume, date, address } = parsed.data;
+
+    // Check company and ownership validation
+    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    if (req.user.role === UserRole.PERUSAHAAN && company.picId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You do not own this company' });
+    }
+
+    const parsedVolume = parseFloat(volume.replace(/[^0-9.]/g, '')) || 0;
+    const calculatedCost = parsedVolume > 0 ? parsedVolume * 10000 : 50000; // Flat Rp 10.000 per unit, min 50.000
+
+    // Generate Invoice automatically
+    const invoice = await prisma.invoice.create({
+      data: {
+        companyId,
+        type: InvoiceType.Pengangkutan,
+        amount: calculatedCost,
+        date: new Date().toISOString().split('T')[0],
+        status: InvoiceStatus.UNPAID,
+      },
+    });
+
+    const pickup = await prisma.pickupRequest.create({
+      data: {
+        companyId,
+        wasteType,
+        volume,
+        date,
+        address,
+        status: PickupStatus.PRICED,
+        cost: calculatedCost,
+        invoiceId: invoice.id,
+      },
+    });
+
+    // Write system notification
+    await prisma.systemNotification.create({
+      data: {
+        title: 'Tagihan Penjemputan Limbah Diterbitkan',
+        message: `Pengajuan penjemputan limbah ${wasteType} dari ${company.companyName} terdaftar. Biaya pengangkutan otomatis: Rp ${calculatedCost.toLocaleString()}. Silakan selesaikan pembayaran agar Admin DLH dapat menugaskan pengangkut.`,
+        type: NotificationType.INFO,
+      },
+    });
+
+    return res.status(201).json({ success: true, pickup });
+  } catch (error) {
+    console.error('Create pickup error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function getPickups(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const queryCompanyId = req.query.companyId as string | undefined;
+    let filter: any = {};
+
+    if (req.user.role === UserRole.PERUSAHAAN) {
+      if (queryCompanyId) {
+        const company = await prisma.company.findUnique({ where: { id: queryCompanyId } });
+        if (!company || company.picId !== req.user.id) {
+          return res.status(403).json({ success: false, error: 'Forbidden: You do not own this company' });
+        }
+        filter.companyId = queryCompanyId;
+      } else {
+        filter.company = { picId: req.user.id };
+      }
+    } else {
+      if (queryCompanyId) {
+        filter.companyId = queryCompanyId;
+      }
+    }
+
+    const pickups = await prisma.pickupRequest.findMany({
+      where: filter,
+      include: {
+        company: {
+          select: { id: true, companyName: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return res.status(200).json({ success: true, pickups });
+  } catch (error) {
+    console.error('Get pickups error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function pricePickup(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const parsed = pricePickupSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { cost, driverName, plateNo } = parsed.data;
+
+    const pickup = await prisma.pickupRequest.findUnique({
+      where: { id },
+      include: { company: true }
+    });
+
+    if (!pickup) {
+      return res.status(404).json({ success: false, error: 'Pickup request not found' });
+    }
+
+    // Generate Invoice with UNPAID status
+    const invoice = await prisma.invoice.create({
+      data: {
+        companyId: pickup.companyId,
+        type: InvoiceType.Pengangkutan,
+        amount: cost,
+        date: new Date().toISOString().split('T')[0],
+        status: InvoiceStatus.UNPAID,
+      },
+    });
+
+    // Update pickup with price and driver detail
+    const updatedPickup = await prisma.pickupRequest.update({
+      where: { id },
+      data: {
+        status: PickupStatus.PRICED,
+        cost,
+        driverName,
+        plateNo,
+        invoiceId: invoice.id,
+      },
+    });
+
+    // Notify PIC
+    if (pickup.company.picId) {
+      await prisma.systemNotification.create({
+        data: {
+          title: 'Biaya Pengangkutan Ditetapkan',
+          message: `Biaya penjemputan limbah untuk ${pickup.company.companyName} adalah Rp ${cost.toLocaleString()}. Silakan lakukan pembayaran.`,
+          type: NotificationType.INFO,
+        },
+      });
+    }
+
+    return res.status(200).json({ success: true, pickup: updatedPickup, invoice });
+  } catch (error) {
+    console.error('Price pickup error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function getInvoices(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const queryCompanyId = req.query.companyId as string | undefined;
+    let filter: any = {};
+
+    if (req.user.role === UserRole.PERUSAHAAN) {
+      if (queryCompanyId) {
+        const company = await prisma.company.findUnique({ where: { id: queryCompanyId } });
+        if (!company || company.picId !== req.user.id) {
+          return res.status(403).json({ success: false, error: 'Forbidden: You do not own this company' });
+        }
+        filter.companyId = queryCompanyId;
+      } else {
+        filter.company = { picId: req.user.id };
+      }
+    } else {
+      if (queryCompanyId) {
+        filter.companyId = queryCompanyId;
+      }
+    }
+
+    const invoices = await prisma.invoice.findMany({
+      where: filter,
+      include: {
+        company: {
+          select: { id: true, companyName: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return res.status(200).json({ success: true, invoices });
+  } catch (error) {
+    console.error('Get invoices error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function payInvoice(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+      include: { company: true }
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, error: 'Invoice not found' });
+    }
+
+    if (invoice.status !== InvoiceStatus.UNPAID) {
+      return res.status(400).json({ success: false, error: 'Invoice is already paid or settled' });
+    }
+
+    // Direct Billing simulator: settle immediately to local government RKUD, bypass ESCROW
+    const updatedInvoice = await prisma.invoice.update({
+      where: { id },
+      data: { status: InvoiceStatus.SETTLED }
+    });
+
+    // If there is an associated pickup request, set it to PAID
+    const associatedPickup = await prisma.pickupRequest.findFirst({
+      where: { invoiceId: id }
+    });
+
+    if (associatedPickup) {
+      await prisma.pickupRequest.update({
+        where: { id: associatedPickup.id },
+        data: { status: PickupStatus.PAID }
+      });
+    }
+
+    // Notify PIC
+    if (invoice.company.picId) {
+      await prisma.systemNotification.create({
+        data: {
+          title: 'Pembayaran Diterima (Settled)',
+          message: `Pembayaran tagihan ${id} sebesar Rp ${invoice.amount.toLocaleString()} berhasil disetorkan langsung ke Kas Umum Daerah (RKUD).`,
+          type: NotificationType.SUCCESS,
+        },
+      });
+    }
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Melakukan pembayaran langsung Kas Daerah (Direct Billing settled) untuk invoice ${id}`,
+      },
+    });
+
+    return res.status(200).json({ success: true, invoice: updatedInvoice });
+  } catch (error) {
+    console.error('Pay invoice error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function updatePickupStatus(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const parsed = updateStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { status, evidencePhoto, actualVolume, transportReport } = parsed.data;
+
+    const pickup = await prisma.pickupRequest.findUnique({
+      where: { id },
+      include: { company: true }
+    });
+
+    if (!pickup) {
+      return res.status(404).json({ success: false, error: 'Pickup request not found' });
+    }
+
+    const updatedPickup = await prisma.pickupRequest.update({
+      where: { id },
+      data: {
+        status,
+        evidencePhoto,
+        actualVolume,
+        transportReport,
+      },
+    });
+
+    // Write Audit Log and System Notifications
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Mengubah status pickup ${id} menjadi ${status}`,
+      },
+    });
+
+    if (pickup.company.picId) {
+      await prisma.systemNotification.create({
+        data: {
+          title: `Status Pengangkutan: ${status}`,
+          message: `Penjemputan limbah ${pickup.wasteType} untuk ${pickup.company.companyName} sekarang berstatus ${status}.`,
+          type: status === PickupStatus.COMPLETED ? NotificationType.SUCCESS : NotificationType.INFO,
+        },
+      });
+    }
+
+    return res.status(200).json({ success: true, pickup: updatedPickup });
+  } catch (error) {
+    console.error('Update pickup status error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+const assignTransporterSchema = z.object({
+  transporterId: z.string(),
+  transporterName: z.string()
+});
+
+export async function assignTransporter(req: Request, res: Response) {
+  try {
+    if (!req.user || req.user.role !== UserRole.ADMIN_DLH) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Admin DLH only' });
+    }
+
+    const { id } = req.params;
+    const parsed = assignTransporterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { transporterId, transporterName } = parsed.data;
+
+    const pickup = await prisma.pickupRequest.findUnique({ where: { id }, include: { company: true } });
+    if (!pickup) {
+      return res.status(404).json({ success: false, error: 'Pickup request not found' });
+    }
+
+    const updatedPickup = await prisma.pickupRequest.update({
+      where: { id },
+      data: {
+        transporterId,
+        transporterName,
+      },
+    });
+
+    // Write Audit Log and System Notifications
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Menugaskan pengangkut ${transporterName} untuk pickup ${id}`,
+      },
+    });
+
+    if (pickup.company.picId) {
+      await prisma.systemNotification.create({
+        data: {
+          title: 'Pengangkut Ditugaskan',
+          message: `Admin DLH telah menugaskan pengangkut ${transporterName} untuk menjemput limbah ${pickup.wasteType} Anda.`,
+          type: NotificationType.INFO,
+        },
+      });
+    }
+
+    return res.status(200).json({ success: true, pickup: updatedPickup });
+  } catch (error) {
+    console.error('Assign transporter error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+
+--- FILE: src\controllers\systemController.ts ---
+import { Request, Response } from 'express';
+import { PrismaClient, NotificationType } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+export async function getNotifications(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const notifications = await prisma.systemNotification.findMany({
+      orderBy: { timestamp: 'desc' }
+    });
+
+    return res.status(200).json({ success: true, notifications });
+  } catch (error) {
+    console.error('Get notifications error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function markNotificationsAsRead(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    await prisma.systemNotification.updateMany({
+      where: { read: false },
+      data: { read: true }
+    });
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Mark read error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function getAuditLogs(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const logs = await prisma.auditLog.findMany({
+      orderBy: { timestamp: 'desc' }
+    });
+
+    return res.status(200).json({ success: true, logs });
+  } catch (error) {
+    console.error('Get audit logs error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function createNotification(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { title, message, type } = req.body;
+    if (!title || !message || !type) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const notification = await prisma.systemNotification.create({
+      data: {
+        title,
+        message,
+        type: type as NotificationType,
+      }
+    });
+
+    return res.status(201).json({ success: true, notification });
+  } catch (error) {
+    console.error('Create notification error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function createAuditLog(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { user, role, action } = req.body;
+    if (!user || !role || !action) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const auditLog = await prisma.auditLog.create({
+      data: {
+        user,
+        role,
+        action
+      }
+    });
+
+    return res.status(201).json({ success: true, auditLog });
+  } catch (error) {
+    console.error('Create audit log error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+
+--- FILE: src\controllers\wasteController.ts ---
+import { Request, Response } from 'express';
+import { PrismaClient, WasteLogStatus, UserRole, NotificationType } from '@prisma/client';
+import { z } from 'zod';
+
+const prisma = new PrismaClient();
+
+const createWasteLogSchema = z.object({
+  companyId: z.string(),
+  type: z.string().min(2),
+  volume: z.number().positive(),
+  unit: z.string(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+  method: z.enum(['Dinas', 'Mandiri']),
+  note: z.string().optional(),
+});
+
+export async function createWasteLog(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const parsed = createWasteLogSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { companyId, type, volume, unit, date, method, note } = parsed.data;
+
+    // Check company existence & ownership validation
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    if (req.user.role === UserRole.PERUSAHAAN && company.picId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You do not own this company' });
+    }
+
+    // Default status logic based on pickup method
+    const status = method === 'Dinas' ? WasteLogStatus.Terjadwal_Pickup : WasteLogStatus.Proses_Verifikasi;
+
+    const log = await prisma.wasteLog.create({
+      data: {
+        companyId,
+        type,
+        volume,
+        unit,
+        date,
+        method,
+        status,
+        note,
+      },
+    });
+
+    // Early Warning System AI Anomaly Detection
+    // Volume over 100 triggers warning notification
+    if (volume > 100) {
+      await prisma.systemNotification.create({
+        data: {
+          title: 'EWS: Deteksi Volume Limbah Anomali',
+          message: `Volume limbah ${type} di ${company.companyName} terdeteksi berlebih (${volume} ${unit}). Potensi kebocoran / over kapasitas.`,
+          type: NotificationType.DANGER,
+        },
+      });
+    }
+
+    // Audit Log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Melaporkan limbah ${type} volume ${volume} ${unit} untuk ${company.companyName}`,
+      },
+    });
+
+    return res.status(201).json({ success: true, log });
+  } catch (error) {
+    console.error('Create waste log error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function getWasteLogs(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const queryCompanyId = req.query.companyId as string | undefined;
+
+    let filter: any = {};
+
+    if (req.user.role === UserRole.PERUSAHAAN) {
+      if (queryCompanyId) {
+        // Verify ownership of the queried company
+        const company = await prisma.company.findUnique({ where: { id: queryCompanyId } });
+        if (!company || company.picId !== req.user.id) {
+          return res.status(403).json({ success: false, error: 'Forbidden: You do not own this company' });
+        }
+        filter.companyId = queryCompanyId;
+      } else {
+        // Restrict to all companies owned by this PIC
+        filter.company = { picId: req.user.id };
+      }
+    } else {
+      if (queryCompanyId) {
+        filter.companyId = queryCompanyId;
+      }
+    }
+
+    const logs = await prisma.wasteLog.findMany({
+      where: filter,
+      include: {
+        company: {
+          select: { id: true, companyName: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return res.status(200).json({ success: true, logs });
+  } catch (error) {
+    console.error('Get waste logs error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function verifyWasteLog(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (![WasteLogStatus.Terverifikasi, WasteLogStatus.Ditolak].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid verification status' });
+    }
+
+    const log = await prisma.wasteLog.findUnique({
+      where: { id },
+      include: { company: true }
+    });
+
+    if (!log) {
+      return res.status(404).json({ success: false, error: 'Waste log not found' });
+    }
+
+    const updatedLog = await prisma.wasteLog.update({
+      where: { id },
+      data: { status },
+    });
+
+    // Notify PIC
+    if (log.company.picId) {
+      const type = status === WasteLogStatus.Terverifikasi ? NotificationType.SUCCESS : NotificationType.WARNING;
+      await prisma.systemNotification.create({
+        data: {
+          title: `Laporan Limbah ${status}`,
+          message: `Laporan limbah ${log.type} (${log.volume} ${log.unit}) untuk perusahaan ${log.company.companyName} telah ${status.toLowerCase()} oleh DLH.`,
+          type,
+        },
+      });
+    }
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Melakukan verifikasi laporan limbah ${log.id} sebagai ${status}`,
+      },
+    });
+
+    return res.status(200).json({ success: true, log: updatedLog });
+  } catch (error) {
+    console.error('Verify waste log error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+
+--- FILE: src\middlewares\auth.ts ---
+import { Request, Response, NextFunction } from 'express';
+import { PrismaClient, UserRole } from '@prisma/client';
+import * as jwt from 'jsonwebtoken';
+
+const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'sijaga_secret_key_extremely_secure_12345';
+
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  companyId?: string | null;
+  transporterId?: string | null;
+  officerId?: string | null;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthenticatedUser;
+    }
+  }
+}
+
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Missing or invalid token format' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: string; email: string; role: UserRole };
+    
+    // Fetch the real user from db
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+    });
+
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized: User no longer exists' });
+    }
+
+    req.user = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      companyId: user.companyId,
+      transporterId: user.transporterId,
+      officerId: user.officerId,
+    };
+
+    next();
+  } catch (error) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or expired token' });
+  }
+}
+
+export function requireRoles(...allowedRoles: UserRole[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized: Authentication required' });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Insufficient permissions' });
+    }
+
+    next();
+  };
+}
+
+
+--- FILE: src\middlewares\upload.ts ---
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { Request } from 'express';
+
+// Ensure upload directory exists
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'companies');
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (_req: Request, _file: Express.Multer.File, cb) => {
+    cb(null, UPLOAD_DIR);
+  },
+  filename: (_req: Request, file: Express.Multer.File, cb) => {
+    // e.g. nibDoc-1716000000000-123456789.pdf
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+  },
+});
+
+const fileFilter = (
+  _req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  const allowedMimes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+  if (allowedMimes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Tipe file tidak didukung: ${file.mimetype}. Hanya PDF, JPG, dan PNG yang diizinkan.`));
+  }
+};
+
+export const companyDocUpload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5 MB per file
+  },
+}).fields([
+  { name: 'nibDoc', maxCount: 1 },
+  { name: 'npwpDoc', maxCount: 1 },
+  { name: 'siteplanDoc', maxCount: 1 },
+]);
+
+
+--- FILE: src\routes\adminRoutes.ts ---
+import { Router } from 'express';
+import {
+  createUser,
+  getTransporters,
+  getAllUsers,
+  updateUserRole
+} from '../controllers/adminController';
+import { requireAuth, requireRoles } from '../middlewares/auth';
+import { UserRole } from '@prisma/client';
+
+const router = Router();
+
+// Membuat User Baru (Tersedia untuk Super Admin & Admin DLH)
+router.post(
+  '/users',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+  createUser
+);
+
+// Mengambil Data Transporter (Tersedia untuk Super Admin & Admin DLH)
+router.get(
+  '/transporters',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+  getTransporters
+);
+
+// FUNGSI BARU: Mengambil Semua Data Pengguna (STRICT: Hanya Super Admin)
+router.get(
+  '/users',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN),
+  getAllUsers
+);
+
+// FUNGSI BARU: Mengubah Hak Akses/Role Pengguna (STRICT: Hanya Super Admin)
+router.patch(
+  '/users/:id/role',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN),
+  updateUserRole
+);
+
+export default router;
+
+--- FILE: src\routes\analyticsRoutes.ts ---
+import { Router } from 'express';
+import { getExecutiveAnalytics, getPerformanceAnalytics } from '../controllers/analyticsController';
+import { requireAuth, requireRoles } from '../middlewares/auth';
+import { UserRole } from '@prisma/client';
+
+const router = Router();
+
+// Rute Eksekutif 1: KPI atas, Tren Limbah B3, & Sebaran Kepatuhan Spasial
+router.get(
+    '/executive',
+    requireAuth,
+    requireRoles(UserRole.SUPER_ADMIN, UserRole.AUDITOR),
+    getExecutiveAnalytics
+);
+
+// Rute Eksekutif 2: Kinerja DLH, Bottleneck Pengawasan, & Riwayat Inspeksi Selesai
+router.get(
+    '/performance',
+    requireAuth,
+    requireRoles(UserRole.SUPER_ADMIN, UserRole.AUDITOR),
+    getPerformanceAnalytics
+);
+
+export default router;
+
+--- FILE: src\routes\authRoutes.ts ---
+import { Router } from 'express';
+import { register, login, logout } from '../controllers/authController';
+import { requireAuth } from '../middlewares/auth';
+
+const router = Router();
+
+router.post('/register', register);
+router.post('/login', login);
+router.post('/logout', requireAuth, logout);
+
+export default router;
+
+
+--- FILE: src\routes\companyRoutes.ts ---
+import { Router } from 'express';
+import { createCompany, getCompanies, getCompanyById, updateCompanyStatus, downloadCertificatePdf } from '../controllers/companyController';
+import { requireAuth, requireRoles } from '../middlewares/auth';
+import { companyDocUpload } from '../middlewares/upload';
+import { UserRole } from '@prisma/client';
+
+const router = Router();
+
+// POST /api/companies — uses Multer middleware before the controller
+router.post('/', requireAuth, companyDocUpload, createCompany);
+router.get('/', requireAuth, getCompanies);
+router.get('/:id', requireAuth, getCompanyById);
+router.get('/:id/certificate/pdf', requireAuth, downloadCertificatePdf);
+router.patch(
+  '/:id/status',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+  updateCompanyStatus
+);
+
+export default router;
+
+
+--- FILE: src\routes\inspectionRoutes.ts ---
+import { Router } from 'express';
+import { createInspection, getInspections, submitInspection } from '../controllers/inspectionController';
+import { requireAuth, requireRoles } from '../middlewares/auth';
+import { UserRole } from '@prisma/client';
+
+const router = Router();
+
+router.get('/', requireAuth, getInspections);
+router.post(
+  '/',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH, UserRole.PETUGAS_LAPANGAN),
+  createInspection
+);
+router.post(
+  '/:id/submit',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH, UserRole.PETUGAS_LAPANGAN),
+  submitInspection
+);
+
+export default router;
+
+
+--- FILE: src\routes\invoiceRoutes.ts ---
+import { Router } from 'express';
+import { getInvoices, payInvoice } from '../controllers/pickupController';
+import { requireAuth } from '../middlewares/auth';
+
+const router = Router();
+
+router.get('/', requireAuth, getInvoices);
+router.post('/:id/pay', requireAuth, payInvoice);
+
+export default router;
+
+
+--- FILE: src\routes\pickupRoutes.ts ---
+import { Router } from 'express';
+import { createPickup, getPickups, pricePickup, updatePickupStatus, assignTransporter } from '../controllers/pickupController';
+import { requireAuth, requireRoles } from '../middlewares/auth';
+import { UserRole } from '@prisma/client';
+
+const router = Router();
+
+router.post('/', requireAuth, createPickup);
+router.get('/', requireAuth, getPickups);
+router.post(
+  '/:id/price',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH, UserRole.PENGANGKUT),
+  pricePickup
+);
+router.patch(
+  '/:id/status',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH, UserRole.PENGANGKUT),
+  updatePickupStatus
+);
+router.patch(
+  '/:id/assign',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+  assignTransporter
+);
+
+export default router;
+
+
+--- FILE: src\routes\systemRoutes.ts ---
+import { Router } from 'express';
+import { getNotifications, markNotificationsAsRead, getAuditLogs, createNotification, createAuditLog } from '../controllers/systemController';
+import { requireAuth, requireRoles } from '../middlewares/auth';
+import { UserRole } from '@prisma/client';
+
+const router = Router();
+
+router.get('/notifications', requireAuth, getNotifications);
+router.post('/notifications', requireAuth, requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH), createNotification);
+router.post('/notifications/read', requireAuth, markNotificationsAsRead);
+
+router.get('/audit-logs', requireAuth, requireRoles(UserRole.SUPER_ADMIN), getAuditLogs);
+router.post('/audit-logs', requireAuth, requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH), createAuditLog);
+
+export default router;
+
+
+--- FILE: src\routes\wasteRoutes.ts ---
+import { Router } from 'express';
+import { createWasteLog, getWasteLogs, verifyWasteLog } from '../controllers/wasteController';
+import { requireAuth, requireRoles } from '../middlewares/auth';
+import { UserRole } from '@prisma/client';
+
+const router = Router();
+
+router.post('/', requireAuth, createWasteLog);
+router.get('/', requireAuth, getWasteLogs);
+router.patch(
+  '/:id/verify',
+  requireAuth,
+  requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+  verifyWasteLog
+);
+
+export default router;
+
+
+--- FILE: src\server.ts ---
+import dotenv from 'dotenv';
+dotenv.config();
+
+import app from './app';
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`===============================================`);
+  console.log(`   SIJAGA LINGKUNGAN BACKEND IS RUNNING        `);
+  console.log(`   Port   : http://localhost:${PORT}           `);
+  console.log(`   Env    : ${process.env.NODE_ENV || 'development'}`);
+  console.log(`===============================================`);
+});
+
+
+--- FILE: tsconfig.json ---
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "rootDir": "./",
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*", "prisma/**/*"]
+}
+
