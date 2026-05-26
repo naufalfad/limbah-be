@@ -7,6 +7,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'sijaga_secret_key_extremely_secure
 
 export interface AuthenticatedUser {
   id: string;
+  name: string;
   email: string;
   role: UserRole;
   companyId?: string | null;
@@ -43,6 +44,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     req.user = {
       id: user.id,
+      name: user.name,
       email: user.email,
       role: user.role,
       companyId: user.companyId,

@@ -180,29 +180,44 @@ export async function updateCompanyStatus(req: Request, res: Response) {
       return res.status(404).json({ success: false, error: 'Company not found' });
     }
 
+    let certificateActiveUntil = company.certificateActiveUntil;
+    if (status === CompanyStatus.APPROVED && company.status !== CompanyStatus.APPROVED) {
+      // Calculate active period (1 year from now)
+      const activeUntilDate = new Date();
+      activeUntilDate.setFullYear(activeUntilDate.getFullYear() + 1);
+      certificateActiveUntil = activeUntilDate.toISOString().split('T')[0];
+    }
+
     const updatedCompany = await prisma.company.update({
       where: { id },
-      data: { status },
+      data: { 
+        status,
+        ...(certificateActiveUntil && { certificateActiveUntil })
+      },
     });
 
-    // Auto-generate invoice for certificate activation if approved
     if (status === CompanyStatus.APPROVED && company.status !== CompanyStatus.APPROVED) {
+      // Auto-generate retribusi invoice
       const isUklUpl = updatedCompany.docType === DocType.UKL_UPL;
+      const invoiceAmount = isUklUpl ? 1500000 : 750000;
       const invoiceType = isUklUpl ? InvoiceType.Retribusi_UKL_UPL : InvoiceType.Retribusi_SPPL;
-      const amount = isUklUpl ? 1500000 : 500000;
-
+      
       const existingInvoice = await prisma.invoice.findFirst({
-        where: { companyId: updatedCompany.id, type: invoiceType }
+        where: {
+          companyId: id,
+          type: invoiceType,
+          status: { in: [InvoiceStatus.UNPAID, InvoiceStatus.SETTLED] }
+        }
       });
 
       if (!existingInvoice) {
         await prisma.invoice.create({
           data: {
-            companyId: updatedCompany.id,
+            companyId: id,
+            amount: invoiceAmount,
             type: invoiceType,
-            amount: amount,
+            status: InvoiceStatus.UNPAID,
             date: new Date().toISOString().split('T')[0],
-            status: InvoiceStatus.UNPAID
           }
         });
       }
@@ -261,19 +276,8 @@ export async function downloadCertificatePdf(req: Request, res: Response) {
       return res.status(400).json({ success: false, error: 'Certificate not available yet' });
     }
 
-    // Validas Pembayaran Retribusi (Wajib Lunas)
-    const isUklUpl = company.docType === DocType.UKL_UPL;
-    const requiredInvoiceType = isUklUpl ? InvoiceType.Retribusi_UKL_UPL : InvoiceType.Retribusi_SPPL;
-    const retribusiInvoice = await prisma.invoice.findFirst({
-      where: {
-        companyId: company.id,
-        type: requiredInvoiceType
-      }
-    });
-
-    if (!retribusiInvoice || retribusiInvoice.status !== InvoiceStatus.SETTLED) {
-      return res.status(403).json({ success: false, error: 'Payment Required: Harap lunasi tagihan retribusi untuk mengaktifkan sertifikat.' });
-    }
+    // Validasi Pembayaran Retribusi (Dihapus sesuai permintaan user)
+    // Perusahaan dapat mengunduh sertifikat meskipun belum membayar tagihan.
 
     // Generate PDF
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
@@ -332,5 +336,156 @@ export async function downloadCertificatePdf(req: Request, res: Response) {
     if (!res.headersSent) {
       return res.status(500).json({ success: false, error: 'Internal server error' });
     }
+  }
+}
+
+export async function createRetribusiInvoice(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+
+    const company = await prisma.company.findUnique({
+      where: { id }
+    });
+
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    // Strict ownership validation for PERUSAHAAN role
+    if (req.user.role === UserRole.PERUSAHAAN && company.picId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You do not own this company' });
+    }
+
+    if (company.status !== CompanyStatus.APPROVED) {
+      return res.status(400).json({ success: false, error: 'Company is not approved yet' });
+    }
+
+    const isUklUpl = company.docType === DocType.UKL_UPL;
+    const invoiceType = isUklUpl ? InvoiceType.Retribusi_UKL_UPL : InvoiceType.Retribusi_SPPL;
+    const amount = isUklUpl ? 1500000 : 500000;
+
+    // Check if there is already an UNPAID retribusi invoice
+    const existingUnpaidInvoice = await prisma.invoice.findFirst({
+      where: {
+        companyId: company.id,
+        type: invoiceType,
+        status: InvoiceStatus.UNPAID
+      }
+    });
+
+    if (existingUnpaidInvoice) {
+      return res.status(200).json({ success: true, invoice: existingUnpaidInvoice });
+    }
+
+    // Otherwise, create a new invoice
+    const newInvoice = await prisma.invoice.create({
+      data: {
+        companyId: company.id,
+        type: invoiceType,
+        amount: amount,
+        date: new Date().toISOString().split('T')[0],
+        status: InvoiceStatus.UNPAID
+      }
+    });
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Membuat invoice retribusi baru untuk perusahaan ${company.companyName} (${id})`,
+      },
+    });
+
+    return res.status(201).json({ success: true, invoice: newInvoice });
+  } catch (error) {
+    console.error('Create retribusi invoice error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function updateCompany(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+
+    const company = await prisma.company.findUnique({ where: { id } });
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    // PIC validation
+    if (req.user.role === UserRole.PERUSAHAAN && company.picId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You do not own this company' });
+    }
+
+    const parsed = createCompanySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const data = parsed.data;
+
+    // Smart Assessment for environmental document category
+    const docType = (data.investment >= 5000000000 || data.landArea >= 5000)
+      ? DocType.UKL_UPL
+      : DocType.SPPL;
+
+    // Extract uploaded files from Multer
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const docNibUrl = files?.['nibDoc']?.[0]
+      ? `/uploads/companies/${files['nibDoc'][0].filename}`
+      : company.docNibUrl; // keep old file if no new upload
+    const docNpwpUrl = files?.['npwpDoc']?.[0]
+      ? `/uploads/companies/${files['npwpDoc'][0].filename}`
+      : company.docNpwpUrl; // keep old file if no new upload
+    const docSiteplanUrl = files?.['siteplanDoc']?.[0]
+      ? `/uploads/companies/${files['siteplanDoc'][0].filename}`
+      : company.docSiteplanUrl; // keep old file if no new upload
+
+    const updatedCompany = await prisma.company.update({
+      where: { id },
+      data: {
+        ...data,
+        docType,
+        status: CompanyStatus.PENDING, // Reset status to PENDING
+        docNibUrl,
+        docNpwpUrl,
+        docSiteplanUrl,
+      },
+    });
+
+    // Create system notification for Admin DLH
+    await prisma.systemNotification.create({
+      data: {
+        title: 'Revisi Registrasi Perusahaan',
+        message: `Perusahaan ${updatedCompany.companyName} telah mengirimkan revisi dokumen lingkungan ${docType} untuk diverifikasi ulang.`,
+        type: NotificationType.INFO,
+      },
+    });
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Mengirimkan revisi data perusahaan: ${updatedCompany.companyName} (${id})`,
+      },
+    });
+
+    return res.status(200).json({ success: true, company: updatedCompany });
+  } catch (error: any) {
+    console.error('Update company error:', error);
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, error: 'NIB already registered' });
+    }
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }

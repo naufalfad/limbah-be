@@ -16,6 +16,7 @@ const createInspectionSchema = z.object({
 const submitInspectionSchema = z.object({
   score: z.number().min(0).max(100),
   notes: z.string().optional(),
+  photo: z.string().optional(),
   checklist: z.object({
     tpsB3: z.boolean(),
     ipal: z.boolean(),
@@ -122,7 +123,7 @@ export async function submitInspection(req: Request, res: Response) {
       return res.status(400).json({ success: false, error: parsed.error.errors });
     }
 
-    const { score, notes, checklist } = parsed.data;
+    const { score, notes, photo, checklist } = parsed.data;
 
     const inspection = await prisma.inspection.findUnique({
       where: { id },
@@ -139,6 +140,7 @@ export async function submitInspection(req: Request, res: Response) {
       data: {
         score,
         notes,
+        photo,
         checklist,
         status: InspectionStatus.Selesai,
         bapSigned: true,

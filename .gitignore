@@ -13,6 +13,7 @@ dist-ssr
 *.local
 .env
 recovered
+uploads
 
 # Editor directories and files
 .vscode/*
