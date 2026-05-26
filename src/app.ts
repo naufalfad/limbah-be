@@ -9,6 +9,7 @@ import pickupRoutes from './routes/pickupRoutes';
 import invoiceRoutes from './routes/invoiceRoutes';
 import systemRoutes from './routes/systemRoutes';
 import inspectionRoutes from './routes/inspectionRoutes';
+import analyticsRoutes from './routes/analyticsRoutes'; // IMPOR BARU: Mengimpor router analitik eksekutif
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.use('/api/waste', wasteRoutes);
 app.use('/api/pickups', pickupRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/inspections', inspectionRoutes);
+app.use('/api/analytics', analyticsRoutes); // MOUNT BARU: Mendaftarkan API analitik eksekutif di bawah /api/analytics
 app.use('/api', systemRoutes); // Notifications and audit-logs are mounted directly under /api
 
 // Error handler middleware
