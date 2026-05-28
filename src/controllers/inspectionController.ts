@@ -2,11 +2,11 @@
 import { Request, Response } from 'express';
 import {
   PrismaClient,
-  Prisma, // INJEKSI FIX: Mengimpor namespace Prisma untuk penanganan Json Null
+  Prisma,
   InspectionStatus,
   UserRole,
   NotificationType,
-  ReportStatus // Pemetaan status aduan warga
+  ReportStatus
 } from '@prisma/client';
 import { z } from 'zod';
 
@@ -33,7 +33,7 @@ const submitInspectionSchema = z.object({
     noise: z.boolean(),
     safetyEquipment: z.boolean(),
   }).nullable().optional(),
-  correctedCompanyId: z.string().optional(), // Injeksi parameter Rebinding Pelanggar
+  correctedCompanyId: z.string().optional(),
 });
 
 export async function createInspection(req: Request, res: Response) {
@@ -121,6 +121,7 @@ export async function getInspections(req: Request, res: Response) {
   }
 }
 
+// LOGIKA KITA (Fase 1 Arsitektur Terpadu)
 export async function submitInspection(req: Request, res: Response) {
   try {
     if (!req.user) {
@@ -147,8 +148,6 @@ export async function submitInspection(req: Request, res: Response) {
       return res.status(404).json({ success: false, error: 'Inspection not found' });
     }
 
-    // FASE 1 ARSITEKTUR: Logika Rebinding Target Perusahaan
-    // Jika inspektur mengirim ID baru (misal karena awalnya COM-UNKNOWN)
     let finalCompanyId = inspection.companyId;
     let finalCompanyName = inspection.company.companyName;
     let isRebinded = false;
@@ -163,17 +162,14 @@ export async function submitInspection(req: Request, res: Response) {
       isRebinded = true;
     }
 
-    // FASE 1 ARSITEKTUR: Transaksi All-or-Nothing dengan Data Integrity Guard
     const result = await prisma.$transaction(async (tx) => {
 
-      // 1. Perbarui detail data BAP Inspeksi (Mendukung Payload Rutin maupun Pengaduan)
       const updatedInspection = await tx.inspection.update({
         where: { id },
         data: {
           score: score ?? null,
           notes,
           photo,
-          // FIX TS2322: Meminta Prisma mereset kolom JSON menjadi Database NULL
           checklist: checklist ?? Prisma.DbNull,
           status: InspectionStatus.Selesai,
           bapSigned: true,
@@ -183,8 +179,6 @@ export async function submitInspection(req: Request, res: Response) {
         },
       });
 
-      // 2. Pemutakhiran ESG: Sinkronisasikan skor kepatuhan industri target
-      // GUARD: Hanya di-update jika score benar-benar berupa angka (Audit Rutin)
       if (typeof score === 'number') {
         await tx.company.update({
           where: { id: finalCompanyId },
@@ -192,8 +186,6 @@ export async function submitInspection(req: Request, res: Response) {
         });
       }
 
-      // 3. SINKRONISASI CLOSE-LOOP STATE MACHINE:
-      // Tutup siklus laporan warga menjadi RESOLVED
       let updatedReport = null;
       if (inspection.citizenReport) {
 
@@ -210,7 +202,6 @@ export async function submitInspection(req: Request, res: Response) {
           }
         });
 
-        // Buat notifikasi digital penutupan kasus
         await tx.systemNotification.create({
           data: {
             title: 'Laporan Warga Selesai Ditindak',
@@ -223,7 +214,6 @@ export async function submitInspection(req: Request, res: Response) {
       return { updatedInspection, updatedReport };
     });
 
-    // 4. Pengiriman Notifikasi EWS Sektoral berdasarkan tipe payload
     if (typeof score === 'number') {
       if (score < 60) {
         await prisma.systemNotification.create({
@@ -252,7 +242,6 @@ export async function submitInspection(req: Request, res: Response) {
       });
     }
 
-    // 5. Pencatatan Jejak Tindakan (Audit Log Security)
     let logAction = `Mengirimkan hasil BAP inspeksi ${id} untuk ${finalCompanyName}.`;
     if (typeof score === 'number') logAction += ` (Skor ESG: ${score}/100).`;
     if (isRebinded) logAction += ` (Melakukan Rebind ID dari ${inspection.companyId} ke ${finalCompanyId}).`;
@@ -273,6 +262,94 @@ export async function submitInspection(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('Submit inspection error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+// LOGIKA TEMAN ANDA (Tindak Lanjut Admin DLH)
+const followUpSchema = z.object({
+  action: z.enum(['SESUAI', 'PERINGATAN', 'CABUT_IZIN']),
+  notes: z.string().optional(),
+});
+
+export async function followUpInspection(req: Request, res: Response) {
+  try {
+    if (!req.user || (req.user.role !== UserRole.ADMIN_DLH && req.user.role !== UserRole.SUPER_ADMIN)) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const parsed = followUpSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { action, notes } = parsed.data;
+
+    const inspection = await prisma.inspection.findUnique({
+      where: { id },
+      include: { company: true }
+    });
+
+    if (!inspection) {
+      return res.status(404).json({ success: false, error: 'Inspection not found' });
+    }
+
+    let notificationTitle = '';
+    let notificationMessage = '';
+    let notificationType: NotificationType = NotificationType.INFO;
+
+    if (action === 'SESUAI') {
+      notificationTitle = 'Inspeksi Tervalidasi Sesuai';
+      notificationMessage = `Hasil inspeksi Anda telah divalidasi oleh Admin DLH. Catatan: ${notes || '-'}`;
+      notificationType = NotificationType.SUCCESS;
+    } else if (action === 'PERINGATAN') {
+      notificationTitle = 'Peringatan Hasil Inspeksi';
+      notificationMessage = `Terdapat teguran dari Admin DLH terkait hasil inspeksi. Catatan: ${notes || '-'}`;
+      notificationType = NotificationType.WARNING;
+    } else if (action === 'CABUT_IZIN') {
+      notificationTitle = 'Pencabutan Izin Operasional';
+      notificationMessage = `Berdasarkan hasil inspeksi, izin operasional perusahaan Anda dibekukan/dicabut. Catatan: ${notes || '-'}`;
+      notificationType = NotificationType.DANGER;
+
+      // Suspend company
+      await prisma.company.update({
+        where: { id: inspection.companyId },
+        data: { status: 'SUSPENDED' }
+      });
+    }
+
+    const updatedNotes = inspection.notes
+      ? `${inspection.notes}\n\n[Tindak Lanjut Admin]: ${notes || 'Tidak ada catatan tambahan'}`
+      : `[Tindak Lanjut Admin]: ${notes || 'Tidak ada catatan tambahan'}`;
+
+    const updatedInspection = await prisma.inspection.update({
+      where: { id },
+      data: {
+        notes: updatedNotes,
+        status: InspectionStatus.Selesai
+      }
+    });
+
+    await prisma.systemNotification.create({
+      data: {
+        title: notificationTitle,
+        message: notificationMessage,
+        type: notificationType,
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Melakukan tindak lanjut (${action}) untuk inspeksi ${id} milik ${inspection.company.companyName}`,
+      }
+    });
+
+    return res.status(200).json({ success: true, inspection: updatedInspection });
+  } catch (error) {
+    console.error('Follow-up inspection error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }
