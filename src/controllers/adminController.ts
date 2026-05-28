@@ -1,3 +1,4 @@
+// src/controllers/adminController.ts
 import { Request, Response } from 'express';
 import { PrismaClient, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -98,6 +99,31 @@ export async function getTransporters(req: Request, res: Response) {
     return res.status(200).json({ success: true, transporters });
   } catch (error) {
     console.error('Get transporters error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+// INJEKSI BARU: Mengambil semua data Petugas Lapangan (Inspector) secara tersegmentasi & aman [3]
+export async function getOfficers(req: Request, res: Response) {
+  try {
+    // Validasi otorisasi: Hanya Admin DLH dan Super Admin yang diizinkan mengakses koordinasi dispatch petugas [3]
+    if (!req.user || (req.user.role !== UserRole.ADMIN_DLH && req.user.role !== UserRole.SUPER_ADMIN)) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Insufficient privileges' });
+    }
+
+    const officers = await prisma.user.findMany({
+      where: { role: UserRole.PETUGAS_LAPANGAN },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        officerId: true, // ID Petugas Lapangan internal
+      }
+    });
+
+    return res.status(200).json({ success: true, officers });
+  } catch (error) {
+    console.error('Get officers error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }

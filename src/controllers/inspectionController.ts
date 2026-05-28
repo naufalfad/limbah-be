@@ -1,5 +1,13 @@
+// src/controllers/inspectionController.ts
 import { Request, Response } from 'express';
-import { PrismaClient, InspectionStatus, UserRole, NotificationType } from '@prisma/client';
+import {
+  PrismaClient,
+  Prisma, // INJEKSI FIX: Mengimpor namespace Prisma untuk penanganan Json Null
+  InspectionStatus,
+  UserRole,
+  NotificationType,
+  ReportStatus // Pemetaan status aduan warga
+} from '@prisma/client';
 import { z } from 'zod';
 
 const prisma = new PrismaClient();
@@ -13,8 +21,9 @@ const createInspectionSchema = z.object({
   notes: z.string().optional(),
 });
 
+// FASE 1 ARSITEKTUR: Penerapan Payload Polymorphism
 const submitInspectionSchema = z.object({
-  score: z.number().min(0).max(100),
+  score: z.number().min(0).max(100).nullable().optional(),
   notes: z.string().optional(),
   photo: z.string().optional(),
   checklist: z.object({
@@ -23,7 +32,8 @@ const submitInspectionSchema = z.object({
     apar: z.boolean(),
     noise: z.boolean(),
     safetyEquipment: z.boolean(),
-  }),
+  }).nullable().optional(),
+  correctedCompanyId: z.string().optional(), // Injeksi parameter Rebinding Pelanggar
 });
 
 export async function createInspection(req: Request, res: Response) {
@@ -123,69 +133,144 @@ export async function submitInspection(req: Request, res: Response) {
       return res.status(400).json({ success: false, error: parsed.error.errors });
     }
 
-    const { score, notes, photo, checklist } = parsed.data;
+    const { score, notes, photo, checklist, correctedCompanyId } = parsed.data;
 
     const inspection = await prisma.inspection.findUnique({
       where: { id },
-      include: { company: true }
+      include: {
+        company: true,
+        citizenReport: true
+      }
     });
 
     if (!inspection) {
       return res.status(404).json({ success: false, error: 'Inspection not found' });
     }
 
-    // Update inspection details
-    const updatedInspection = await prisma.inspection.update({
-      where: { id },
-      data: {
-        score,
-        notes,
-        photo,
-        checklist,
-        status: InspectionStatus.Selesai,
-        bapSigned: true,
-        // Override inspector UUID and Name to whoever actually submitted the audit
-        inspectorId: req.user.id,
-        inspectorName: req.user.name,
-      },
-    });
+    // FASE 1 ARSITEKTUR: Logika Rebinding Target Perusahaan
+    // Jika inspektur mengirim ID baru (misal karena awalnya COM-UNKNOWN)
+    let finalCompanyId = inspection.companyId;
+    let finalCompanyName = inspection.company.companyName;
+    let isRebinded = false;
 
-    // Compliance Sync: Update the company's ESG score
-    await prisma.company.update({
-      where: { id: inspection.companyId },
-      data: { score }
-    });
+    if (correctedCompanyId && correctedCompanyId !== inspection.companyId) {
+      const targetCompany = await prisma.company.findUnique({ where: { id: correctedCompanyId } });
+      if (!targetCompany) {
+        return res.status(404).json({ success: false, error: 'Entitas perusahaan target rebind tidak ditemukan di database.' });
+      }
+      finalCompanyId = targetCompany.id;
+      finalCompanyName = targetCompany.companyName;
+      isRebinded = true;
+    }
 
-    // EWS Warning: If score < 60, send danger alert
-    if (score < 60) {
-      await prisma.systemNotification.create({
+    // FASE 1 ARSITEKTUR: Transaksi All-or-Nothing dengan Data Integrity Guard
+    const result = await prisma.$transaction(async (tx) => {
+
+      // 1. Perbarui detail data BAP Inspeksi (Mendukung Payload Rutin maupun Pengaduan)
+      const updatedInspection = await tx.inspection.update({
+        where: { id },
         data: {
-          title: 'EWS: Tingkat Kepatuhan Kritis',
-          message: `Hasil inspeksi di ${inspection.company.companyName} menujukkan skor kritis (${score}/100).`,
-          type: NotificationType.WARNING,
+          score: score ?? null,
+          notes,
+          photo,
+          // FIX TS2322: Meminta Prisma mereset kolom JSON menjadi Database NULL
+          checklist: checklist ?? Prisma.DbNull,
+          status: InspectionStatus.Selesai,
+          bapSigned: true,
+          companyId: finalCompanyId,
+          inspectorId: req.user!.id,
+          inspectorName: req.user!.name,
         },
       });
+
+      // 2. Pemutakhiran ESG: Sinkronisasikan skor kepatuhan industri target
+      // GUARD: Hanya di-update jika score benar-benar berupa angka (Audit Rutin)
+      if (typeof score === 'number') {
+        await tx.company.update({
+          where: { id: finalCompanyId },
+          data: { score }
+        });
+      }
+
+      // 3. SINKRONISASI CLOSE-LOOP STATE MACHINE:
+      // Tutup siklus laporan warga menjadi RESOLVED
+      let updatedReport = null;
+      if (inspection.citizenReport) {
+
+        let resolutionNote = notes || `Pengaduan diselesaikan secara tuntas berdasarkan hasil Berita Acara Pemeriksaan (BAP) lapangan oleh petugas ${req.user!.name}.`;
+        if (isRebinded) {
+          resolutionNote = `[IDENTIFIKASI PELANGGAR DITEMUKAN] Pelaku pembuangan limbah diarahkan ke entitas terdaftar: ${finalCompanyName}. ` + resolutionNote;
+        }
+
+        updatedReport = await tx.citizenReport.update({
+          where: { id: inspection.citizenReport.id },
+          data: {
+            status: ReportStatus.RESOLVED,
+            adminNotes: resolutionNote
+          }
+        });
+
+        // Buat notifikasi digital penutupan kasus
+        await tx.systemNotification.create({
+          data: {
+            title: 'Laporan Warga Selesai Ditindak',
+            message: `Aduan warga (ID: ${inspection.citizenReport.trackingId}) telah berstatus RESOLVED setelah ditindak secara fisik oleh petugas di lokasi.`,
+            type: NotificationType.SUCCESS,
+          }
+        });
+      }
+
+      return { updatedInspection, updatedReport };
+    });
+
+    // 4. Pengiriman Notifikasi EWS Sektoral berdasarkan tipe payload
+    if (typeof score === 'number') {
+      if (score < 60) {
+        await prisma.systemNotification.create({
+          data: {
+            title: 'EWS: Tingkat Kepatuhan Kritis',
+            message: `Hasil inspeksi di ${finalCompanyName} menujukkan skor kritis (${score}/100).`,
+            type: NotificationType.WARNING,
+          },
+        });
+      } else {
+        await prisma.systemNotification.create({
+          data: {
+            title: 'Hasil Evaluasi Kepatuhan',
+            message: `Inspeksi rutin selesai di ${finalCompanyName} dengan skor kepatuhan ${score}/100.`,
+            type: NotificationType.SUCCESS,
+          },
+        });
+      }
     } else {
-      // Regular success notification
       await prisma.systemNotification.create({
         data: {
-          title: 'Hasil Evaluasi Kepatuhan',
-          message: `Inspeksi selesai di ${inspection.company.companyName} dengan skor kepatuhan ${score}/100.`,
-          type: NotificationType.SUCCESS,
+          title: 'BAP Penindakan Terkirim',
+          message: `Berita Acara Pemeriksaan Lapangan terhadap ${finalCompanyName} berhasil diamankan ke sistem.`,
+          type: NotificationType.INFO,
         },
       });
     }
 
-    // Write audit log
+    // 5. Pencatatan Jejak Tindakan (Audit Log Security)
+    let logAction = `Mengirimkan hasil BAP inspeksi ${id} untuk ${finalCompanyName}.`;
+    if (typeof score === 'number') logAction += ` (Skor ESG: ${score}/100).`;
+    if (isRebinded) logAction += ` (Melakukan Rebind ID dari ${inspection.companyId} ke ${finalCompanyId}).`;
+    if (result.updatedReport) logAction += ` (Menutup kasus pengaduan warga ${inspection.citizenReport!.trackingId} menjadi RESOLVED).`;
+
     await prisma.auditLog.create({
       data: {
         user: req.user.email,
         role: req.user.role,
-        action: `Mengirimkan hasil BAP inspeksi ${id} untuk ${inspection.company.companyName} dengan nilai ${score}`,
+        action: logAction,
       },
     });
 
-    return res.status(200).json({ success: true, inspection: updatedInspection });
+    return res.status(200).json({
+      success: true,
+      inspection: result.updatedInspection,
+      citizenReport: result.updatedReport
+    });
   } catch (error) {
     console.error('Submit inspection error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });

@@ -2,7 +2,7 @@
 CREATE TYPE "UserRole" AS ENUM ('SUPER_ADMIN', 'ADMIN_DLH', 'PETUGAS_LAPANGAN', 'PERUSAHAAN', 'PENGANGKUT', 'AUDITOR');
 
 -- CreateEnum
-CREATE TYPE "CompanyStatus" AS ENUM ('PENDING', 'REVIEW', 'APPROVED', 'REJECTED');
+CREATE TYPE "CompanyStatus" AS ENUM ('PENDING', 'REVIEW', 'APPROVED', 'REJECTED', 'SUSPENDED');
 
 -- CreateEnum
 CREATE TYPE "DocType" AS ENUM ('SPPL', 'UKL-UPL');
@@ -24,6 +24,9 @@ CREATE TYPE "InspectionStatus" AS ENUM ('Selesai', 'Terjadwal', 'Dibatalkan');
 
 -- CreateEnum
 CREATE TYPE "NotificationType" AS ENUM ('WARNING', 'INFO', 'SUCCESS', 'DANGER');
+
+-- CreateEnum
+CREATE TYPE "ReportStatus" AS ENUM ('PENDING', 'VERIFIED', 'INVESTIGATING', 'RESOLVED', 'REJECTED');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -69,6 +72,10 @@ CREATE TABLE "Company" (
     "score" DOUBLE PRECISION,
     "wasteInfo" TEXT,
     "hasTps" BOOLEAN NOT NULL DEFAULT false,
+    "docNibUrl" TEXT,
+    "docNpwpUrl" TEXT,
+    "docSiteplanUrl" TEXT,
+    "certificateActiveUntil" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "picId" TEXT,
@@ -100,14 +107,16 @@ CREATE TABLE "PickupRequest" (
     "volume" TEXT NOT NULL,
     "date" TEXT NOT NULL,
     "status" "PickupStatus" NOT NULL DEFAULT 'PENDING',
-    "transporterId" TEXT NOT NULL,
-    "transporterName" TEXT NOT NULL,
+    "transporterId" TEXT,
+    "transporterName" TEXT,
     "cost" DOUBLE PRECISION,
     "plateNo" TEXT,
     "driverName" TEXT,
     "evidencePhoto" TEXT,
     "invoiceId" TEXT,
     "address" TEXT,
+    "actualVolume" TEXT,
+    "transportReport" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "PickupRequest_pkey" PRIMARY KEY ("id")
@@ -146,6 +155,26 @@ CREATE TABLE "Inspection" (
 );
 
 -- CreateTable
+CREATE TABLE "CitizenReport" (
+    "id" TEXT NOT NULL,
+    "trackingId" TEXT NOT NULL,
+    "reporterName" TEXT,
+    "reporterContact" TEXT,
+    "incidentType" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "lat" TEXT NOT NULL,
+    "lng" TEXT NOT NULL,
+    "evidencePhoto" TEXT NOT NULL,
+    "status" "ReportStatus" NOT NULL DEFAULT 'PENDING',
+    "adminNotes" TEXT,
+    "inspectionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CitizenReport_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "SystemNotification" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -174,6 +203,12 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 -- CreateIndex
 CREATE UNIQUE INDEX "Company_nib_key" ON "Company"("nib");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "CitizenReport_trackingId_key" ON "CitizenReport"("trackingId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CitizenReport_inspectionId_key" ON "CitizenReport"("inspectionId");
+
 -- AddForeignKey
 ALTER TABLE "Company" ADD CONSTRAINT "Company_picId_fkey" FOREIGN KEY ("picId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -187,4 +222,7 @@ ALTER TABLE "PickupRequest" ADD CONSTRAINT "PickupRequest_companyId_fkey" FOREIG
 ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Inspection" ADD CONSTRAINT "Inspection_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Inspection" ADD CONSTRAINT "Inspection_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CitizenReport" ADD CONSTRAINT "CitizenReport_inspectionId_fkey" FOREIGN KEY ("inspectionId") REFERENCES "Inspection"("id") ON DELETE SET NULL ON UPDATE CASCADE;
