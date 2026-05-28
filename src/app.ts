@@ -9,7 +9,8 @@ import pickupRoutes from './routes/pickupRoutes';
 import invoiceRoutes from './routes/invoiceRoutes';
 import systemRoutes from './routes/systemRoutes';
 import inspectionRoutes from './routes/inspectionRoutes';
-import analyticsRoutes from './routes/analyticsRoutes'; // IMPOR BARU: Mengimpor router analitik eksekutif
+import analyticsRoutes from './routes/analyticsRoutes';
+import reportRoutes from './routes/reportRoutes'; // IMPOR BARU: Routing Pengaduan Masyarakat
 
 const app = express();
 
@@ -25,7 +26,6 @@ app.use(express.json());
 // Serve uploaded files statically — accessible at /uploads/companies/filename.pdf
 app.use('/uploads', express.static('uploads'));
 
-
 // Main Mount API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -34,7 +34,8 @@ app.use('/api/waste', wasteRoutes);
 app.use('/api/pickups', pickupRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/inspections', inspectionRoutes);
-app.use('/api/analytics', analyticsRoutes); // MOUNT BARU: Mendaftarkan API analitik eksekutif di bawah /api/analytics
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/reports', reportRoutes); // MOUNT BARU: Mendaftarkan API pelaporan
 app.use('/api', systemRoutes); // Notifications and audit-logs are mounted directly under /api
 
 // Error handler middleware

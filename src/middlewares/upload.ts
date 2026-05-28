@@ -3,24 +3,44 @@ import path from 'path';
 import fs from 'fs';
 import { Request } from 'express';
 
-// Ensure upload directory exists
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'companies');
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// --- DEFINISI DIREKTORI PENYIMPANAN (GRASP: High Cohesion) ---
+const COMPANIES_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'companies');
+const REPORTS_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'reports');
+
+// Memastikan direktori penyimpanan tercipta secara otomatis saat server booting
+if (!fs.existsSync(COMPANIES_UPLOAD_DIR)) {
+  fs.mkdirSync(COMPANIES_UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(REPORTS_UPLOAD_DIR)) {
+  fs.mkdirSync(REPORTS_UPLOAD_DIR, { recursive: true });
 }
 
-const storage = multer.diskStorage({
+// --- CONFIG STORAGE 1: DOKUMEN PERUSAHAAN (LOW COUPLING) ---
+const companyStorage = multer.diskStorage({
   destination: (_req: Request, _file: Express.Multer.File, cb) => {
-    cb(null, UPLOAD_DIR);
+    cb(null, COMPANIES_UPLOAD_DIR);
   },
   filename: (_req: Request, file: Express.Multer.File, cb) => {
-    // e.g. nibDoc-1716000000000-123456789.pdf
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
   },
 });
 
+// --- CONFIG STORAGE 2: FOTO PENGADUAN WARGA (LOW COUPLING) ---
+const reportStorage = multer.diskStorage({
+  destination: (_req: Request, _file: Express.Multer.File, cb) => {
+    cb(null, REPORTS_UPLOAD_DIR);
+  },
+  filename: (_req: Request, file: Express.Multer.File, cb) => {
+    // Hasil file: evidencePhotos-1716000000000-123456789.jpg
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+  },
+});
+
+// --- FILTER VALIDASI FORMAT (Anti-Hoax Security Layer) ---
 const fileFilter = (
   _req: Request,
   file: Express.Multer.File,
@@ -43,8 +63,9 @@ const fileFilter = (
   }
 };
 
+// --- EXPORT MIDDLEWARE 1: DOKUMEN INDUSTRI (EXISTING) ---
 export const companyDocUpload = multer({
-  storage,
+  storage: companyStorage,
   fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5 MB per file
@@ -55,3 +76,13 @@ export const companyDocUpload = multer({
   { name: 'siteplanDoc', maxCount: 1 },
   { name: 'docTemplate', maxCount: 1 },
 ]);
+
+// --- EXPORT MIDDLEWARE 2: MULTI-PHOTOS PENGADUAN WARGA (INJEKSI BARU) ---
+// Menerima multiple files (array) dengan nama field 'evidencePhotos' maksimal 5 file.
+export const citizenReportUpload = multer({
+  storage: reportStorage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // Pembatasan ketat 5 MB per berkas foto
+  },
+}).array('evidencePhotos', 5);

@@ -151,6 +151,15 @@ enum NotificationType {
   DANGER
 }
 
+// INJEKSI BARU: Enum untuk State Machine Pelaporan Publik
+enum ReportStatus {
+  PENDING           // Menunggu kurasi Admin DLH
+  VERIFIED          // Valid, siap diubah jadi Surat Tugas Inspeksi
+  INVESTIGATING     // Sedang di-BAP oleh Petugas Lapangan
+  RESOLVED          // Kasus ditutup / Selesai ditindak
+  REJECTED          // Spam / Hoax / Data tidak valid
+}
+
 model User {
   id            String    @id @default(uuid())
   name          String
@@ -271,7 +280,44 @@ model Inspection {
   // Checklist item disimpan sebagai objek JSON
   checklist      Json?            // Format: { tpsB3: boolean, ipal: boolean, apar: boolean, noise: boolean, safetyEquipment: boolean }
   
+  // INJEKSI BARU: Relasi balik (Reverse relation) ke laporan masyarakat (1-to-1)
+  citizenReport  CitizenReport?
+
   createdAt      DateTime         @default(now())
+}
+
+// INJEKSI BARU: Entitas Utama Laporan Spasial Masyarakat
+model CitizenReport {
+  id              String       @id @default(uuid())
+  
+  // ID unik dan pendek untuk diberikan ke warga sebagai akses pelacakan
+  trackingId      String       @unique
+  
+  // Identitas opsional untuk whistleblower
+  reporterName    String?      
+  reporterContact String?      
+  
+  // Payload
+  incidentType    String       
+  description     String       @db.Text
+  lat             String
+  lng             String
+  
+  // IMPLEMENTASI PILIHAN B (Multipart Multer Upload):
+  // Field ini menyimpan serialized JSON array string dari path file foto di server.
+  // Contoh format: ["/uploads/reports/file-xxxx.jpg", "/uploads/reports/file-yyyy.png"]
+  evidencePhoto   String       @db.Text
+  
+  // State Workflow & Evaluasi
+  status          ReportStatus @default(PENDING)
+  adminNotes      String?      
+  
+  // Relasi: Satu laporan hanya bisa memicu tepat satu inspeksi (1-to-1)
+  inspectionId    String?      @unique
+  inspection      Inspection?  @relation(fields: [inspectionId], references: [id])
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 }
 
 model SystemNotification {
@@ -290,7 +336,6 @@ model AuditLog {
   role      String
   action    String
 }
-
 
 --- FILE: prisma\seed.ts ---
 import { PrismaClient, UserRole, CompanyStatus, DocType, WasteLogStatus, PickupStatus, InvoiceType, InvoiceStatus, InspectionStatus, NotificationType } from '@prisma/client';
@@ -685,7 +730,8 @@ import pickupRoutes from './routes/pickupRoutes';
 import invoiceRoutes from './routes/invoiceRoutes';
 import systemRoutes from './routes/systemRoutes';
 import inspectionRoutes from './routes/inspectionRoutes';
-import analyticsRoutes from './routes/analyticsRoutes'; // IMPOR BARU: Mengimpor router analitik eksekutif
+import analyticsRoutes from './routes/analyticsRoutes';
+import reportRoutes from './routes/reportRoutes'; // IMPOR BARU: Routing Pengaduan Masyarakat
 
 const app = express();
 
@@ -701,7 +747,6 @@ app.use(express.json());
 // Serve uploaded files statically — accessible at /uploads/companies/filename.pdf
 app.use('/uploads', express.static('uploads'));
 
-
 // Main Mount API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -710,7 +755,8 @@ app.use('/api/waste', wasteRoutes);
 app.use('/api/pickups', pickupRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/inspections', inspectionRoutes);
-app.use('/api/analytics', analyticsRoutes); // MOUNT BARU: Mendaftarkan API analitik eksekutif di bawah /api/analytics
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/reports', reportRoutes); // MOUNT BARU: Mendaftarkan API pelaporan
 app.use('/api', systemRoutes); // Notifications and audit-logs are mounted directly under /api
 
 // Error handler middleware
@@ -2247,6 +2293,252 @@ export async function assignTransporter(req: Request, res: Response) {
 }
 
 
+--- FILE: src\controllers\reportController.ts ---
+// src/controllers/reportController.ts
+import { Request, Response } from 'express';
+import { PrismaClient, ReportStatus } from '@prisma/client';
+import crypto from 'crypto';
+
+const prisma = new PrismaClient();
+
+/**
+ * Helper: Generator ID Pelacakan Unik (Frictionless UX)
+ * Format: RPT-YYYYMMDD-XXXX (contoh: RPT-20260526-A8F2)
+ */
+const generateTrackingId = (): string => {
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const randomStr = crypto.randomBytes(2).toString('hex').toUpperCase();
+    return `RPT-${date}-${randomStr}`;
+};
+
+/**
+ * [PUBLIC] Submit Laporan Baru
+ * GRASP: Creator (Menginstansiasi objek CitizenReport baru)
+ */
+export const submitReport = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { incidentType, description, lat, lng, reporterName, reporterContact } = req.body;
+
+        // Membaca array file biner yang diunggah via Multer (Pilihan B)
+        const files = req.files as Express.Multer.File[] | undefined;
+
+        // 1. Validasi Payload Teks Inti
+        if (!incidentType || !description || !lat || !lng) {
+            res.status(400).json({
+                success: false,
+                message: 'Data wajib (klasifikasi insiden, deskripsi, lokasi) tidak lengkap.'
+            });
+            return;
+        }
+
+        // 2. Validasi File Bukti Visual (Anti-Hoax Layer)
+        if (!files || files.length === 0) {
+            res.status(400).json({
+                success: false,
+                message: 'Bukti visual kejadian (minimal 1 foto) wajib diunggah.'
+            });
+            return;
+        }
+
+        // 3. Pemetaan Path File Penyimpanan Biner & Serialisasi ke JSON Array
+        const photoPaths = files.map(file => `/uploads/reports/${file.filename}`);
+        const evidencePhotoJson = JSON.stringify(photoPaths);
+
+        let trackingId = generateTrackingId();
+        let isUnique = false;
+
+        // Pastikan trackingId benar-benar unik di database
+        while (!isUnique) {
+            const existing = await prisma.citizenReport.findUnique({ where: { trackingId } });
+            if (!existing) {
+                isUnique = true;
+            } else {
+                trackingId = generateTrackingId();
+            }
+        }
+
+        const report = await prisma.citizenReport.create({
+            data: {
+                trackingId,
+                incidentType,
+                description,
+                lat: String(lat),
+                lng: String(lng),
+                evidencePhoto: evidencePhotoJson, // Menyimpan string JSON array path foto
+                reporterName: reporterName || null,
+                reporterContact: reporterContact || null,
+                status: ReportStatus.PENDING,
+            }
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'Laporan berhasil disubmit.',
+            data: { trackingId: report.trackingId }
+        });
+    } catch (error: any) {
+        console.error('Error in submitReport:', error);
+        res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
+    }
+};
+
+/**
+ * [PUBLIC] Lacak Status Laporan
+ * GRASP: Information Expert (Mengambil data spesifik tanpa mengekspos ID internal)
+ */
+export const trackReport = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { trackingId } = req.params;
+
+        const report = await prisma.citizenReport.findUnique({
+            where: { trackingId },
+            select: {
+                trackingId: true,
+                incidentType: true,
+                description: true,
+                status: true,
+                adminNotes: true,
+                evidencePhoto: true,
+                lat: true, // << WAJIB DITAMBAHKAN!
+                lng: true, // << WAJIB DITAMBAHKAN!
+                createdAt: true,
+            }
+        });
+
+        if (!report) {
+            res.status(404).json({ success: false, message: 'Laporan dengan Tracking ID tersebut tidak ditemukan.' });
+            return;
+        }
+
+        res.status(200).json({ success: true, data: report });
+    } catch (error: any) {
+        console.error('Error in trackReport:', error);
+        res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
+    }
+};
+
+/**
+ * [PROTECTED: ADMIN] Ambil Semua Laporan untuk Dashboard Triage
+ */
+export const getReports = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { status } = req.query;
+
+        // Filter dinamis berdasarkan tab (PENDING, VERIFIED, dll)
+        const filter = status ? { status: status as ReportStatus } : {};
+
+        const reports = await prisma.citizenReport.findMany({
+            where: filter,
+            orderBy: { createdAt: 'desc' },
+            include: {
+                inspection: true // Bawa data surat tugas jika sudah diverifikasi
+            }
+        });
+
+        res.status(200).json({ success: true, data: reports });
+    } catch (error: any) {
+        console.error('Error in getReports:', error);
+        res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
+    }
+};
+
+/**
+ * [PROTECTED: ADMIN] Verifikasi dan Konversi menjadi Surat Tugas
+ * GRASP: Controller & Transactional Cohesion
+ */
+export const verifyAndCreateInspection = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        // Admin harus menugaskan siapa yang turun ke lapangan dan kapan jadwalnya
+        const { inspectorId, inspectorName, date, companyId, adminNotes } = req.body;
+
+        if (!inspectorId || !inspectorName || !date || !companyId) {
+            res.status(400).json({ success: false, message: 'Data penugasan inspeksi (petugas, tanggal, target pabrik) wajib diisi.' });
+            return;
+        }
+
+        const report = await prisma.citizenReport.findUnique({ where: { id } });
+        if (!report) {
+            res.status(404).json({ success: false, message: 'Laporan tidak ditemukan.' });
+            return;
+        }
+
+        if (report.status !== ReportStatus.PENDING) {
+            res.status(400).json({ success: false, message: `Laporan tidak bisa diverifikasi karena status saat ini: ${report.status}` });
+            return;
+        }
+
+        // Menggunakan Prisma Transaction agar data konsisten (All or Nothing)
+        const result = await prisma.$transaction(async (tx) => {
+            // 1. Buat surat tugas Inspeksi baru
+            const newInspection = await tx.inspection.create({
+                data: {
+                    companyId,
+                    inspectorId,
+                    inspectorName,
+                    date,
+                    location: `${report.lat},${report.lng}`, // Menggunakan titik koordinat dari warga
+                    notes: `Inspeksi berdasarkan Pengaduan Masyarakat (ID: ${report.trackingId}). Keluhan: ${report.incidentType}`,
+                    status: 'Terjadwal',
+                }
+            });
+
+            // 2. Update status Laporan Masyarakat dan ikatkan ID inspeksi
+            const updatedReport = await tx.citizenReport.update({
+                where: { id },
+                data: {
+                    status: ReportStatus.VERIFIED,
+                    adminNotes: adminNotes || 'Laporan valid. Menunggu eksekusi petugas lapangan.',
+                    inspectionId: newInspection.id
+                }
+            });
+
+            return { newInspection, updatedReport };
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Laporan berhasil diverifikasi dan Surat Tugas Inspeksi telah diterbitkan.',
+            data: result
+        });
+    } catch (error: any) {
+        console.error('Error in verifyAndCreateInspection:', error);
+        res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
+    }
+};
+
+/**
+ * [PROTECTED: ADMIN] Tolak Laporan (Spam/Hoax)
+ */
+export const rejectReport = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const { adminNotes } = req.body;
+
+        if (!adminNotes) {
+            res.status(400).json({ success: false, message: 'Alasan penolakan (adminNotes) wajib diisi.' });
+            return;
+        }
+
+        const report = await prisma.citizenReport.update({
+            where: { id },
+            data: {
+                status: ReportStatus.REJECTED,
+                adminNotes
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Laporan ditolak dan diarsipkan sebagai tidak valid.',
+            data: report
+        });
+    } catch (error: any) {
+        console.error('Error in rejectReport:', error);
+        res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
+    }
+};
+
 --- FILE: src\controllers\systemController.ts ---
 import { Request, Response } from 'express';
 import { PrismaClient, NotificationType } from '@prisma/client';
@@ -2626,24 +2918,44 @@ import path from 'path';
 import fs from 'fs';
 import { Request } from 'express';
 
-// Ensure upload directory exists
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'companies');
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// --- DEFINISI DIREKTORI PENYIMPANAN (GRASP: High Cohesion) ---
+const COMPANIES_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'companies');
+const REPORTS_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'reports');
+
+// Memastikan direktori penyimpanan tercipta secara otomatis saat server booting
+if (!fs.existsSync(COMPANIES_UPLOAD_DIR)) {
+  fs.mkdirSync(COMPANIES_UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(REPORTS_UPLOAD_DIR)) {
+  fs.mkdirSync(REPORTS_UPLOAD_DIR, { recursive: true });
 }
 
-const storage = multer.diskStorage({
+// --- CONFIG STORAGE 1: DOKUMEN PERUSAHAAN (LOW COUPLING) ---
+const companyStorage = multer.diskStorage({
   destination: (_req: Request, _file: Express.Multer.File, cb) => {
-    cb(null, UPLOAD_DIR);
+    cb(null, COMPANIES_UPLOAD_DIR);
   },
   filename: (_req: Request, file: Express.Multer.File, cb) => {
-    // e.g. nibDoc-1716000000000-123456789.pdf
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
   },
 });
 
+// --- CONFIG STORAGE 2: FOTO PENGADUAN WARGA (LOW COUPLING) ---
+const reportStorage = multer.diskStorage({
+  destination: (_req: Request, _file: Express.Multer.File, cb) => {
+    cb(null, REPORTS_UPLOAD_DIR);
+  },
+  filename: (_req: Request, file: Express.Multer.File, cb) => {
+    // Hasil file: evidencePhotos-1716000000000-123456789.jpg
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+  },
+});
+
+// --- FILTER VALIDASI FORMAT (Anti-Hoax Security Layer) ---
 const fileFilter = (
   _req: Request,
   file: Express.Multer.File,
@@ -2657,8 +2969,9 @@ const fileFilter = (
   }
 };
 
+// --- EXPORT MIDDLEWARE 1: DOKUMEN INDUSTRI (EXISTING) ---
 export const companyDocUpload = multer({
-  storage,
+  storage: companyStorage,
   fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5 MB per file
@@ -2669,6 +2982,15 @@ export const companyDocUpload = multer({
   { name: 'siteplanDoc', maxCount: 1 },
 ]);
 
+// --- EXPORT MIDDLEWARE 2: MULTI-PHOTOS PENGADUAN WARGA (INJEKSI BARU) ---
+// Menerima multiple files (array) dengan nama field 'evidencePhotos' maksimal 5 file.
+export const citizenReportUpload = multer({
+  storage: reportStorage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // Pembatasan ketat 5 MB per berkas foto
+  },
+}).array('evidencePhotos', 5);
 
 --- FILE: src\routes\adminRoutes.ts ---
 import { Router } from 'express';
@@ -2850,6 +3172,63 @@ router.patch(
 
 export default router;
 
+
+--- FILE: src\routes\reportRoutes.ts ---
+// src/routes/reportRoutes.ts
+import { Router } from 'express';
+import {
+    submitReport,
+    trackReport,
+    getReports,
+    verifyAndCreateInspection,
+    rejectReport
+} from '../controllers/reportController';
+import { requireAuth, requireRoles } from '../middlewares/auth';
+import { citizenReportUpload } from '../middlewares/upload'; // INJEKSI MIDDLEWARE BARU (Multipart Handler)
+import { UserRole } from '@prisma/client';
+
+const router = Router();
+
+// ==========================================
+// 1. PUBLIC ROUTES (Masyarakat Tanpa Login)
+// ==========================================
+
+// Endpoint untuk warga mengirimkan laporan (DILENGKAPI HANDLING MULTIPART FILE UPLOAD)
+router.post('/public/submit', citizenReportUpload, submitReport);
+
+// Endpoint untuk warga melacak status via Tracking ID
+router.get('/public/track/:trackingId', trackReport);
+
+
+// ==========================================
+// 2. PROTECTED ROUTES (Admin DLH / Verifikator)
+// ==========================================
+
+// Endpoint untuk mengambil seluruh daftar laporan di Dashboard (Bisa pakai query ?status=PENDING)
+router.get(
+    '/admin',
+    requireAuth,
+    requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+    getReports
+);
+
+// Endpoint eksekusi: Mengonversi laporan valid menjadi Surat Tugas (Inspection)
+router.post(
+    '/admin/:id/verify',
+    requireAuth,
+    requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+    verifyAndCreateInspection
+);
+
+// Endpoint eksekusi: Menandai laporan sebagai hoax/spam
+router.post(
+    '/admin/:id/reject',
+    requireAuth,
+    requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+    rejectReport
+);
+
+export default router;
 
 --- FILE: src\routes\systemRoutes.ts ---
 import { Router } from 'express';

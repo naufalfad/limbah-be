@@ -73,6 +73,15 @@ enum NotificationType {
   DANGER
 }
 
+// INJEKSI BARU: Enum untuk State Machine Pelaporan Publik
+enum ReportStatus {
+  PENDING           // Menunggu kurasi Admin DLH
+  VERIFIED          // Valid, siap diubah jadi Surat Tugas Inspeksi
+  INVESTIGATING     // Sedang di-BAP oleh Petugas Lapangan
+  RESOLVED          // Kasus ditutup / Selesai ditindak
+  REJECTED          // Spam / Hoax / Data tidak valid
+}
+
 model User {
   id            String    @id @default(uuid())
   name          String
@@ -195,7 +204,44 @@ model Inspection {
   // Checklist item disimpan sebagai objek JSON
   checklist      Json?            // Format: { tpsB3: boolean, ipal: boolean, apar: boolean, noise: boolean, safetyEquipment: boolean }
   
+  // INJEKSI BARU: Relasi balik (Reverse relation) ke laporan masyarakat (1-to-1)
+  citizenReport  CitizenReport?
+
   createdAt      DateTime         @default(now())
+}
+
+// INJEKSI BARU: Entitas Utama Laporan Spasial Masyarakat
+model CitizenReport {
+  id              String       @id @default(uuid())
+  
+  // ID unik dan pendek untuk diberikan ke warga sebagai akses pelacakan
+  trackingId      String       @unique
+  
+  // Identitas opsional untuk whistleblower
+  reporterName    String?      
+  reporterContact String?      
+  
+  // Payload
+  incidentType    String       
+  description     String       @db.Text
+  lat             String
+  lng             String
+  
+  // IMPLEMENTASI PILIHAN B (Multipart Multer Upload):
+  // Field ini menyimpan serialized JSON array string dari path file foto di server.
+  // Contoh format: ["/uploads/reports/file-xxxx.jpg", "/uploads/reports/file-yyyy.png"]
+  evidencePhoto   String       @db.Text
+  
+  // State Workflow & Evaluasi
+  status          ReportStatus @default(PENDING)
+  adminNotes      String?      
+  
+  // Relasi: Satu laporan hanya bisa memicu tepat satu inspeksi (1-to-1)
+  inspectionId    String?      @unique
+  inspection      Inspection?  @relation(fields: [inspectionId], references: [id])
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 }
 
 model SystemNotification {
