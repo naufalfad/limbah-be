@@ -60,6 +60,9 @@ export async function createCompany(req: Request, res: Response) {
     const docSiteplanUrl = files?.['siteplanDoc']?.[0]
       ? `/uploads/companies/${files['siteplanDoc'][0].filename}`
       : null;
+    const docTemplateUrl = files?.['docTemplate']?.[0]
+      ? `/uploads/companies/${files['docTemplate'][0].filename}`
+      : null;
 
     const company = await prisma.company.create({
       data: {
@@ -70,6 +73,7 @@ export async function createCompany(req: Request, res: Response) {
         ...(docNibUrl && { docNibUrl }),
         ...(docNpwpUrl && { docNpwpUrl }),
         ...(docSiteplanUrl && { docSiteplanUrl }),
+        ...(docTemplateUrl && { docTemplateUrl }),
       },
     });
 
@@ -449,6 +453,9 @@ export async function updateCompany(req: Request, res: Response) {
     const docSiteplanUrl = files?.['siteplanDoc']?.[0]
       ? `/uploads/companies/${files['siteplanDoc'][0].filename}`
       : company.docSiteplanUrl; // keep old file if no new upload
+    const docTemplateUrl = files?.['docTemplate']?.[0]
+      ? `/uploads/companies/${files['docTemplate'][0].filename}`
+      : company.docTemplateUrl; // keep old file if no new upload
 
     const updatedCompany = await prisma.company.update({
       where: { id },
@@ -459,6 +466,7 @@ export async function updateCompany(req: Request, res: Response) {
         docNibUrl,
         docNpwpUrl,
         docSiteplanUrl,
+        docTemplateUrl,
       },
     });
 
@@ -489,3 +497,89 @@ export async function updateCompany(req: Request, res: Response) {
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }
+
+const createManualAmdalSchema = z.object({
+  companyName: z.string().min(2),
+  nib: z.string().min(5),
+  npwp: z.string().optional(),
+  lat: z.string(),
+  lng: z.string(),
+  address: z.string().min(5),
+});
+
+export async function createManualAmdalCompany(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const parsed = createManualAmdalSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const data = parsed.data;
+
+    // Set certificate validity period (1 year from now)
+    const activeUntilDate = new Date();
+    activeUntilDate.setFullYear(activeUntilDate.getFullYear() + 1);
+    const certificateActiveUntil = activeUntilDate.toISOString().split('T')[0];
+
+    const company = await prisma.company.create({
+      data: {
+        companyName: data.companyName,
+        nib: data.nib,
+        npwp: data.npwp || '-',
+        lat: data.lat,
+        lng: data.lng,
+        address: data.address,
+        docType: DocType.AMDAL,
+        status: CompanyStatus.APPROVED,
+        certificateActiveUntil,
+        
+        // Manual AMDAL fallbacks for required fields
+        picName: 'Admin DLH Manual',
+        picPhone: '-',
+        picRole: 'Admin',
+        investmentType: 'PMDN',
+        yearBuilt: String(new Date().getFullYear()),
+        buildingArea: 0,
+        operationalHours: '-',
+        rawMaterials: '-',
+        waterSource: '-',
+        powerSource: '-',
+        kbli: '00000',
+        investment: 0,
+        landArea: 0,
+        employees: 0,
+      },
+    });
+
+    // Create system notification
+    await prisma.systemNotification.create({
+      data: {
+        title: 'Registrasi AMDAL Manual',
+        message: `Admin DLH telah mendaftarkan koordinat wajib AMDAL untuk ${company.companyName} secara manual.`,
+        type: NotificationType.SUCCESS,
+      },
+    });
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Mendaftarkan perusahaan wajib AMDAL secara manual: ${company.companyName} (${company.id})`,
+      },
+    });
+
+    return res.status(201).json({ success: true, company });
+  } catch (error: any) {
+    console.error('Create manual AMDAL company error:', error);
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, error: 'NIB already registered' });
+    }
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+

@@ -191,3 +191,91 @@ export async function submitInspection(req: Request, res: Response) {
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }
+
+const followUpSchema = z.object({
+  action: z.enum(['SESUAI', 'PERINGATAN', 'CABUT_IZIN']),
+  notes: z.string().optional(),
+});
+
+export async function followUpInspection(req: Request, res: Response) {
+  try {
+    if (!req.user || (req.user.role !== UserRole.ADMIN_DLH && req.user.role !== UserRole.SUPER_ADMIN)) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const parsed = followUpSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const { action, notes } = parsed.data;
+
+    const inspection = await prisma.inspection.findUnique({
+      where: { id },
+      include: { company: true }
+    });
+
+    if (!inspection) {
+      return res.status(404).json({ success: false, error: 'Inspection not found' });
+    }
+
+    let notificationTitle = '';
+    let notificationMessage = '';
+    let notificationType: NotificationType = NotificationType.INFO;
+
+    if (action === 'SESUAI') {
+      notificationTitle = 'Inspeksi Tervalidasi Sesuai';
+      notificationMessage = `Hasil inspeksi Anda telah divalidasi oleh Admin DLH. Catatan: ${notes || '-'}`;
+      notificationType = NotificationType.SUCCESS;
+    } else if (action === 'PERINGATAN') {
+      notificationTitle = 'Peringatan Hasil Inspeksi';
+      notificationMessage = `Terdapat teguran dari Admin DLH terkait hasil inspeksi. Catatan: ${notes || '-'}`;
+      notificationType = NotificationType.WARNING;
+    } else if (action === 'CABUT_IZIN') {
+      notificationTitle = 'Pencabutan Izin Operasional';
+      notificationMessage = `Berdasarkan hasil inspeksi, izin operasional perusahaan Anda dibekukan/dicabut. Catatan: ${notes || '-'}`;
+      notificationType = NotificationType.DANGER;
+
+      
+      // Suspend company
+      await prisma.company.update({
+        where: { id: inspection.companyId },
+        data: { status: 'SUSPENDED' }
+      });
+    }
+
+    const updatedNotes = inspection.notes 
+      ? `${inspection.notes}\n\n[Tindak Lanjut Admin]: ${notes || 'Tidak ada catatan tambahan'}`
+      : `[Tindak Lanjut Admin]: ${notes || 'Tidak ada catatan tambahan'}`;
+
+    const updatedInspection = await prisma.inspection.update({
+      where: { id },
+      data: {
+        notes: updatedNotes,
+        status: InspectionStatus.Selesai
+      }
+    });
+
+    await prisma.systemNotification.create({
+      data: {
+        title: notificationTitle,
+        message: notificationMessage,
+        type: notificationType,
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Melakukan tindak lanjut (${action}) untuk inspeksi ${id} milik ${inspection.company.companyName}`,
+      }
+    });
+
+    return res.status(200).json({ success: true, inspection: updatedInspection });
+  } catch (error) {
+    console.error('Follow-up inspection error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}

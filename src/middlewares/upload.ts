@@ -26,11 +26,20 @@ const fileFilter = (
   file: Express.Multer.File,
   cb: multer.FileFilterCallback
 ) => {
-  const allowedMimes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+  const allowedMimes = [
+    'application/pdf',
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+    'application/vnd.ms-excel', // .xls
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+    'application/msword' // .doc
+  ];
   if (allowedMimes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error(`Tipe file tidak didukung: ${file.mimetype}. Hanya PDF, JPG, dan PNG yang diizinkan.`));
+    cb(new Error(`Tipe file tidak didukung: ${file.mimetype}. Hanya PDF, JPG, PNG, Excel (.xls/.xlsx), dan Word (.doc/.docx) yang diizinkan.`));
   }
 };
 
@@ -44,4 +53,5 @@ export const companyDocUpload = multer({
   { name: 'nibDoc', maxCount: 1 },
   { name: 'npwpDoc', maxCount: 1 },
   { name: 'siteplanDoc', maxCount: 1 },
+  { name: 'docTemplate', maxCount: 1 },
 ]);
