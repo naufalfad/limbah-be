@@ -1,3 +1,4 @@
+// src/app.ts
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -21,7 +22,12 @@ app.use(cors({
 }));
 
 app.use(morgan('dev'));
-app.use(express.json());
+
+// FASE 1 ARSITEKTUR (THE PAYLOAD FIX): 
+// Memperlebar pipa penerimaan data hingga 50MB.
+// Wajib untuk mengakomodasi payload Base64 (Tanda Tangan Digital & Multi-Photo Bukti BAP)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Serve uploaded files statically — accessible at /uploads/companies/filename.pdf
 app.use('/uploads', express.static('uploads'));
