@@ -11,7 +11,8 @@ import invoiceRoutes from './routes/invoiceRoutes';
 import systemRoutes from './routes/systemRoutes';
 import inspectionRoutes from './routes/inspectionRoutes';
 import analyticsRoutes from './routes/analyticsRoutes';
-import reportRoutes from './routes/reportRoutes'; // IMPOR BARU: Routing Pengaduan Masyarakat
+import reportRoutes from './routes/reportRoutes';
+import agentRoutes from './routes/agent.routes'; // IMPOR BARU: Routing AI Agent Spasial Forensik [3]
 
 const app = express();
 
@@ -41,7 +42,8 @@ app.use('/api/pickups', pickupRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/inspections', inspectionRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/reports', reportRoutes); // MOUNT BARU: Mendaftarkan API pelaporan
+app.use('/api/reports', reportRoutes);
+app.use('/api/agent', agentRoutes); // MOUNT BARU: Mendaftarkan API AI Agent Spasial [3]
 app.use('/api', systemRoutes); // Notifications and audit-logs are mounted directly under /api
 
 // Error handler middleware

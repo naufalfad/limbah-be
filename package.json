@@ -11,7 +11,9 @@
     "prisma:seed": "npx ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^5.14.0",
+    "@turf/turf": "^7.3.5",
     "@types/multer": "^2.1.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
@@ -27,6 +29,7 @@
     "@types/bcrypt": "^5.0.2",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
+    "@types/geojson": "^7946.0.16",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.19.41",
