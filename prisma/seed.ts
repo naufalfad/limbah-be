@@ -16,7 +16,15 @@ const prisma = new PrismaClient();
 
 async function main() {
   console.log('Clearing database...');
-  // Pengosongan data diatur berurutan untuk menghindari kegagalan integritas referensi (Foreign Key Constraint)
+
+  // =================================================================================
+  // URUTAN PENGOSONGAN DATA (Integritas Konstrain):
+  // 
+  // 1. CitizenReport di-decouple sepenuhnya, sehingga aman dihapus kapan saja.
+  // 2. Inspection wajib dihapus SEBELUM Company karena ada aturan onDelete: Restrict.
+  // 3. Seluruh detail transaksi (Invoice, PickupRequest, WasteLog) dibersihkan.
+  // 4. Company dihapus sebelum User (PIC) dibersihkan.
+  // =================================================================================
   await prisma.citizenReport.deleteMany();
   await prisma.inspection.deleteMany();
   await prisma.invoice.deleteMany();
@@ -78,7 +86,7 @@ async function main() {
   const budi = await prisma.user.create({
     data: {
       id: 'USER-005',
-      name: 'Budi (PT. Tekstil)',
+      name: 'Budi Santoso',
       email: 'user@geocitra.com',
       password: budiPassword,
       role: UserRole.PERUSAHAAN,
@@ -95,11 +103,9 @@ async function main() {
     },
   });
 
-  console.log('Seeding companies and placeholder entities...');
+  console.log('Seeding companies and spatial data (Kotawaringin Timur)...');
 
-  // 2. SEED ENTITAS TIRUAN: Null Object Pattern (COM-UNKNOWN) [3]
-  // Digunakan sebagai penampung sementara bagi penugasan inspeksi yang titik koordinatnya 
-  // dilaporkan oleh warga tanpa diketahui nama perusahaannya saat proses triage [3].
+  // 2. SEED ENTITAS TIRUAN: Null Object Pattern (COM-UNKNOWN)
   await prisma.company.create({
     data: {
       id: 'COM-UNKNOWN',
@@ -120,20 +126,20 @@ async function main() {
       investment: 0.0,
       landArea: 0.0,
       employees: 0,
-      lat: '-6.9147',
-      lng: '107.6098',
-      address: 'Lokasi Belum Teridentifikasi',
+      // Titik Pusat Kota Sampit (Default)
+      lat: '-2.5337',
+      lng: '112.9515',
+      address: 'Lokasi Belum Teridentifikasi (Kotawaringin Timur)',
       docType: DocType.SPPL,
       status: CompanyStatus.APPROVED,
     },
   });
 
-  // 3. SEED PERUSAHAAN BUDI: PT. Tekstil Sejahtera (COM-001)
-  // Berfungsi untuk sinkronisasi data master operasional antara FE dan BE
+  // 3. SEED PERUSAHAAN 1: Area Mentawa Baru Ketapang (Skor Bagus)
   await prisma.company.create({
     data: {
       id: 'COM-001',
-      companyName: 'PT. Tekstil Sejahtera',
+      companyName: 'PT. Tekstil Mentaya',
       nib: '9120301294821',
       npwp: '01.234.567.8-401.000',
       picName: 'Budi Santoso',
@@ -150,13 +156,75 @@ async function main() {
       investment: 8500000000.0,
       landArea: 6000.0,
       employees: 120,
-      lat: '-6.9147',
-      lng: '107.6098',
-      address: 'Jl. Rancaekek KM 15, Kec. Cicadas, Bandung',
+      lat: '-2.5800',  // Koordinat area Telaga Baru / MB Ketapang
+      lng: '112.9900',
+      address: 'Jl. HM Arsyad KM 3, Mentawa Baru Ketapang, Kotawaringin Timur',
       docType: DocType.UKL_UPL,
       status: CompanyStatus.APPROVED,
-      score: 85.0,
-      picId: 'USER-005', // Terikat ke akun pengguna Budi (USER-005)
+      score: 85.0, // PATUH
+      picId: 'USER-005',
+    },
+  });
+
+  // 4. SEED PERUSAHAAN 2: Area Cempaga (Skor Kritis) - Agar Peta Auditor Punya Titik Merah
+  await prisma.company.create({
+    data: {
+      id: 'COM-002',
+      companyName: 'PT. Agro Sawit Lestari',
+      nib: '8820301294112',
+      npwp: '02.345.678.9-402.000',
+      picName: 'Budi Santoso',
+      picPhone: '08129876543',
+      picRole: 'Manajer Pabrik',
+      investmentType: 'PMA',
+      yearBuilt: '2015',
+      buildingArea: 15000.0,
+      operationalHours: '24 Jam',
+      rawMaterials: 'Kelapa Sawit (CPO)',
+      waterSource: 'Sungai',
+      powerSource: 'Genset Industri',
+      kbli: '10431',
+      investment: 25000000000.0,
+      landArea: 50000.0,
+      employees: 450,
+      lat: '-2.2500',  // Koordinat area Cempaga
+      lng: '113.0500',
+      address: 'Jl. Tjilik Riwut KM 35, Kec. Cempaga, Kotawaringin Timur',
+      docType: DocType.UKL_UPL, // Akan di-render kuning oleh Admin
+      status: CompanyStatus.APPROVED,
+      score: 45.0, // KRITIS (Akan di-render merah oleh Auditor)
+      picId: 'USER-005',
+    },
+  });
+
+  // 5. SEED PERUSAHAAN 3: Area Baamang (Skor Menengah)
+  await prisma.company.create({
+    data: {
+      id: 'COM-003',
+      companyName: 'Pabrik Kayu Lapis Jaya',
+      nib: '7720301294553',
+      npwp: '03.456.789.0-403.000',
+      picName: 'Budi Santoso',
+      picPhone: '08771234567',
+      picRole: 'Pemilik',
+      investmentType: 'PMDN',
+      yearBuilt: '2020',
+      buildingArea: 4000.0,
+      operationalHours: '08:00 - 17:00',
+      rawMaterials: 'Kayu Sengon, Lem Kimia',
+      waterSource: 'Sumur Bor',
+      powerSource: 'PLN 5500 VA',
+      kbli: '16211',
+      investment: 3000000000.0,
+      landArea: 8000.0,
+      employees: 85,
+      lat: '-2.4900',  // Koordinat area Baamang (Dekat Bandara)
+      lng: '112.9300',
+      address: 'Jl. Tjilik Riwut KM 5, Kec. Baamang, Kotawaringin Timur',
+      docType: DocType.SPPL,
+      status: CompanyStatus.APPROVED,
+      score: 68.0, // PERINGATAN (Akan di-render kuning oleh Auditor)
+      picId: 'USER-005',
     },
   });
 

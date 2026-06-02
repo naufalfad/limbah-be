@@ -72,7 +72,7 @@ enum NotificationType {
   DANGER
 }
 
-// INJEKSI BARU: Enum untuk State Machine Pelaporan Publik
+// Enum untuk State Machine Pelaporan Publik
 enum ReportStatus {
   PENDING           // Menunggu kurasi Admin DLH
   VERIFIED          // Valid, siap diubah jadi Surat Tugas Inspeksi
@@ -206,13 +206,12 @@ model Inspection {
   // Checklist item disimpan sebagai objek JSON
   checklist      Json?            // Format: { tpsB3: boolean, ipal: boolean, apar: boolean, noise: boolean, safetyEquipment: boolean }
   
-  // Relasi balik (Reverse relation) ke laporan masyarakat (1-to-1)
-  citizenReport  CitizenReport?
+  // RELASI BALIK KE CITIZEN REPORT DIHAPUS UNTUK MENJAGA ISOLASI CORE SYSTEM
 
   createdAt      DateTime         @default(now())
 }
 
-// INJEKSI BARU: Entitas Utama Laporan Spasial Masyarakat
+// Entitas Utama Laporan Spasial Masyarakat (Isolasi Mandiri / Arsip Statis)
 model CitizenReport {
   id              String       @id @default(uuid())
   
@@ -237,13 +236,8 @@ model CitizenReport {
   status          ReportStatus @default(PENDING)
   adminNotes      String?      
   
-  // Relasi: Satu laporan hanya bisa memicu tepat satu inspeksi (1-to-1)
-  inspectionId    String?      @unique
-  
-  // PERUBAHAN ARSITEKTURAL: Menggunakan onDelete: SetNull agar pembatalan/penghapusan
-  // Surat Tugas (Inspection) internal dinas tidak ikut menghapus pengaduan asli warga [3].
-  inspection      Inspection?  @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
-  
+  // RELASI MAUPUN ID HUBUNGAN DENGAN INSPECTION DIHAPUS TOTAL DI SINI
+
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 }
