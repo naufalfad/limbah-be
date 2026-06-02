@@ -2,11 +2,11 @@
 import { Request, Response } from 'express';
 import {
   PrismaClient,
-  Prisma,
+  Prisma, // Mengimpor namespace Prisma untuk penanganan Json Null (DbNull)
   InspectionStatus,
   UserRole,
-  NotificationType,
-  ReportStatus
+  NotificationType
+  // ReportStatus dihilangkan karena relasi eksternal dibongkar [3]
 } from '@prisma/client';
 import { z } from 'zod';
 
@@ -17,11 +17,11 @@ const createInspectionSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   inspectorId: z.string(),
   inspectorName: z.string().min(2),
-  location: z.string(),
+  location: z.string(), // Mampu menerima koordinat custom manual (contoh: "-2.5337, 112.9515")
   notes: z.string().optional(),
 });
 
-// FASE 1 ARSITEKTUR: Penerapan Payload Polymorphism
+// Penerapan Payload Polymorphism
 const submitInspectionSchema = z.object({
   score: z.number().min(0).max(100).nullable().optional(),
   notes: z.string().optional(),
@@ -33,9 +33,16 @@ const submitInspectionSchema = z.object({
     noise: z.boolean(),
     safetyEquipment: z.boolean(),
   }).nullable().optional(),
-  correctedCompanyId: z.string().optional(),
+  correctedCompanyId: z.string().optional(), // Parameter Rebinding Pelanggar untuk COM-UNKNOWN
 });
 
+/**
+ * [PROTECTED: ADMIN DLH / SUPER ADMIN] Membuat Jadwal Inspeksi (Surat Tugas Baru)
+ * GRASP: Creator (DLH menciptakan Surat Tugas/Inspection)
+ * 
+ * Sesuai arsitektur baru, fungsi ini dipanggil langsung oleh Admin DLH 
+ * untuk membuat Surat Tugas (Rutin Bulanan atau Ad-Hoc Penyelidikan Lapangan) [3].
+ */
 export async function createInspection(req: Request, res: Response) {
   try {
     if (!req.user) {
@@ -49,9 +56,10 @@ export async function createInspection(req: Request, res: Response) {
 
     const { companyId, date, inspectorId, inspectorName, location, notes } = parsed.data;
 
+    // Menarik target industri (Mendukung Null-Object 'COM-UNKNOWN' untuk kasus tanpa pelanggar terdaftar)
     const company = await prisma.company.findUnique({ where: { id: companyId } });
     if (!company) {
-      return res.status(404).json({ success: false, error: 'Company not found' });
+      return res.status(404).json({ success: false, error: 'Company/Target entity not found' });
     }
 
     const inspection = await prisma.inspection.create({
@@ -66,7 +74,7 @@ export async function createInspection(req: Request, res: Response) {
       },
     });
 
-    // Notify company PIC
+    // Kirim notifikasi ke PIC jika entitas industri valid (Bukan COM-UNKNOWN)
     if (company.picId) {
       await prisma.systemNotification.create({
         data: {
@@ -77,7 +85,7 @@ export async function createInspection(req: Request, res: Response) {
       });
     }
 
-    // Write audit log
+    // Catat tindakan ke audit log
     await prisma.auditLog.create({
       data: {
         user: req.user.email,
@@ -93,6 +101,9 @@ export async function createInspection(req: Request, res: Response) {
   }
 }
 
+/**
+ * [PROTECTED: ALL ROLES] Mengambil Data Riwayat Penugasan Inspeksi
+ */
 export async function getInspections(req: Request, res: Response) {
   try {
     if (!req.user) {
@@ -121,7 +132,13 @@ export async function getInspections(req: Request, res: Response) {
   }
 }
 
-// LOGIKA KITA (Fase 1 Arsitektur Terpadu)
+/**
+ * [PROTECTED: OFFICER / DLH / SUPER ADMIN] Submit Hasil BAP Lapangan
+ * GRASP: Controller & Transactional Cohesion (Mengelola Data Integrity)
+ * 
+ * ARSITEKTUR UPDATE: Logika transaksi close-loop untuk meng-update CitizenReport 
+ * telah dibuang total demi menjaga kebersihan core database perizinan [3].
+ */
 export async function submitInspection(req: Request, res: Response) {
   try {
     if (!req.user) {
@@ -136,11 +153,11 @@ export async function submitInspection(req: Request, res: Response) {
 
     const { score, notes, photo, checklist, correctedCompanyId } = parsed.data;
 
+    // Membaca Surat Tugas (include: citizenReport dibuang karena relasi telah diputus) [3]
     const inspection = await prisma.inspection.findUnique({
       where: { id },
       include: {
-        company: true,
-        citizenReport: true
+        company: true
       }
     });
 
@@ -148,6 +165,7 @@ export async function submitInspection(req: Request, res: Response) {
       return res.status(404).json({ success: false, error: 'Inspection not found' });
     }
 
+    // FASE 1 ARSITEKTUR: Logika Rebinding Target Perusahaan (Khusus COM-UNKNOWN)
     let finalCompanyId = inspection.companyId;
     let finalCompanyName = inspection.company.companyName;
     let isRebinded = false;
@@ -164,12 +182,14 @@ export async function submitInspection(req: Request, res: Response) {
 
     const result = await prisma.$transaction(async (tx) => {
 
+      // 1. Perbarui detail data BAP Inspeksi (Sesuai parameter input fisik lapangan)
       const updatedInspection = await tx.inspection.update({
         where: { id },
         data: {
           score: score ?? null,
           notes,
           photo,
+          // Menyetel kolom JSON menjadi DB NULL jika checklist kosong
           checklist: checklist ?? Prisma.DbNull,
           status: InspectionStatus.Selesai,
           bapSigned: true,
@@ -179,6 +199,8 @@ export async function submitInspection(req: Request, res: Response) {
         },
       });
 
+      // 2. Pemutakhiran ESG: Sinkronisasikan skor kepatuhan industri target
+      // GUARD: Hanya di-update jika score benar-benar berupa angka (Bukan Penyelidikan Aduan)
       if (typeof score === 'number') {
         await tx.company.update({
           where: { id: finalCompanyId },
@@ -186,40 +208,18 @@ export async function submitInspection(req: Request, res: Response) {
         });
       }
 
-      let updatedReport = null;
-      if (inspection.citizenReport) {
+      // --- LOGIKA UPDATE CITIZEN REPORT DIHAPUS TOTAL DI SINI UNTUK DECOUPLING ---
 
-        let resolutionNote = notes || `Pengaduan diselesaikan secara tuntas berdasarkan hasil Berita Acara Pemeriksaan (BAP) lapangan oleh petugas ${req.user!.name}.`;
-        if (isRebinded) {
-          resolutionNote = `[IDENTIFIKASI PELANGGAR DITEMUKAN] Pelaku pembuangan limbah diarahkan ke entitas terdaftar: ${finalCompanyName}. ` + resolutionNote;
-        }
-
-        updatedReport = await tx.citizenReport.update({
-          where: { id: inspection.citizenReport.id },
-          data: {
-            status: ReportStatus.RESOLVED,
-            adminNotes: resolutionNote
-          }
-        });
-
-        await tx.systemNotification.create({
-          data: {
-            title: 'Laporan Warga Selesai Ditindak',
-            message: `Aduan warga (ID: ${inspection.citizenReport.trackingId}) telah berstatus RESOLVED setelah ditindak secara fisik oleh petugas di lokasi.`,
-            type: NotificationType.SUCCESS,
-          }
-        });
-      }
-
-      return { updatedInspection, updatedReport };
+      return { updatedInspection };
     });
 
+    // 3. Pengiriman Notifikasi EWS Sektoral berdasarkan tipe BAP
     if (typeof score === 'number') {
       if (score < 60) {
         await prisma.systemNotification.create({
           data: {
             title: 'EWS: Tingkat Kepatuhan Kritis',
-            message: `Hasil inspeksi di ${finalCompanyName} menujukkan skor kritis (${score}/100).`,
+            message: `Hasil inspeksi di ${finalCompanyName} menunjukkan skor kritis (${score}/100).`,
             type: NotificationType.WARNING,
           },
         });
@@ -242,10 +242,10 @@ export async function submitInspection(req: Request, res: Response) {
       });
     }
 
+    // 4. Pencatatan Jejak Tindakan (Audit Log Security)
     let logAction = `Mengirimkan hasil BAP inspeksi ${id} untuk ${finalCompanyName}.`;
     if (typeof score === 'number') logAction += ` (Skor ESG: ${score}/100).`;
     if (isRebinded) logAction += ` (Melakukan Rebind ID dari ${inspection.companyId} ke ${finalCompanyId}).`;
-    if (result.updatedReport) logAction += ` (Menutup kasus pengaduan warga ${inspection.citizenReport!.trackingId} menjadi RESOLVED).`;
 
     await prisma.auditLog.create({
       data: {
@@ -258,7 +258,7 @@ export async function submitInspection(req: Request, res: Response) {
     return res.status(200).json({
       success: true,
       inspection: result.updatedInspection,
-      citizenReport: result.updatedReport
+      citizenReport: null // Mengirimkan null eksplisit demi menjaga kompatibilitas API client lama [3]
     });
   } catch (error) {
     console.error('Submit inspection error:', error);

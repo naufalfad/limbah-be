@@ -4,8 +4,7 @@ import {
     submitReport,
     trackReport,
     getReports,
-    verifyAndCreateInspection,
-    startInvestigation,
+    // verifyAndCreateInspection & startInvestigation DIHAPUS karena modul di-decouple [3]
     rejectReport
 } from '../controllers/reportController';
 import { requireAuth, requireRoles } from '../middlewares/auth';
@@ -26,20 +25,26 @@ router.get('/public/track/:trackingId', trackReport);
 
 
 // ==========================================
-// 2. PROTECTED ROUTES (Admin DLH / Verifikator / Petugas Lapangan / Auditor)
+// 2. PROTECTED ROUTES (Admin DLH / Super Admin)
 // ==========================================
 
-// Endpoint untuk mengambil daftar laporan spasial
-// PERUBAHAN ARSITEKTUR: Membuka gembok otorisasi rute spasial untuk Petugas & Auditor [3]
+// Endpoint untuk mengambil daftar laporan spasial (Arsip Statis)
+// HAK AKSES DIPERKETAT: Hanya untuk Super Admin dan Admin DLH [3]
 router.get(
     '/admin',
     requireAuth,
-    // INJEKSI: Memasukkan PETUGAS_LAPANGAN & AUDITOR agar tidak ditolak dengan 403 Forbidden [3]
-    requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH, UserRole.PETUGAS_LAPANGAN, UserRole.AUDITOR),
+    requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
     getReports
 );
 
-// Endpoint eksekusi: Mengonversi laporan valid menjadi Surat Tugas (Inspection)
+// =========================================================================
+// DEPRECATED & REMOVED ROUTES (FASE 1 DECOUPLING):
+// 
+// Rute konversi aduan menjadi Surat Tugas (verify) dan inisiasi investigasi
+// patroli (investigate) dihapus total demi integritas core system [3].
+// =========================================================================
+
+/*
 router.post(
     '/admin/:id/verify',
     requireAuth,
@@ -47,15 +52,15 @@ router.post(
     verifyAndCreateInspection
 );
 
-// Endpoint eksekusi transisi status investigasi (INVESTIGATING)
 router.patch(
     '/admin/:id/investigate',
     requireAuth,
     requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH, UserRole.PETUGAS_LAPANGAN),
     startInvestigation
 );
+*/
 
-// Endpoint eksekusi: Menandai laporan sebagai hoax/spam
+// Endpoint eksekusi: Menandai laporan arsip sebagai hoax/spam
 router.post(
     '/admin/:id/reject',
     requireAuth,

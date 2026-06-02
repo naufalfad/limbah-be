@@ -16,8 +16,11 @@ const generateTrackingId = (): string => {
 };
 
 /**
- * [PUBLIC] Submit Laporan Baru
+ * [PUBLIC] Submit Laporan Baru (Arsip Statis / Formalitas)
  * GRASP: Creator (Menginstansiasi objek CitizenReport baru)
+ * 
+ * Sesuai pembaruan arsitektural, data ini murni disimpan sebagai arsip masukan publik
+ * tanpa memicu transisi state machine penugasan apa pun di core system [3].
  */
 export const submitReport = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -87,7 +90,7 @@ export const submitReport = async (req: Request, res: Response): Promise<void> =
 };
 
 /**
- * [PUBLIC] Lacak Status Laporan
+ * [PUBLIC] Lacak Status Laporan (Untuk Kebutuhan Tampilan Pengaduan)
  * GRASP: Information Expert (Mengambil data spesifik tanpa mengekspos ID internal)
  */
 export const trackReport = async (req: Request, res: Response): Promise<void> => {
@@ -122,8 +125,10 @@ export const trackReport = async (req: Request, res: Response): Promise<void> =>
 };
 
 /**
- * [PROTECTED: ADMIN / OFFICER / AUDITOR] Ambil Semua Laporan Spasial
- * PERUBAHAN ARSITEKTURAL: Data Isolation via Switch-Case [3]
+ * [PROTECTED: ADMIN DLH / SUPER ADMIN ONLY] Ambil Semua Laporan Spasial
+ * 
+ * ARSITEKTUR UPDATE: Logika filter relasi 'inspection' dan peran Inspektur/Auditor dihapus
+ * karena modul pengaduan masyarakat telah sepenuhnya di-decouple (terisolasi) menjadi arsip statis [3].
  */
 export const getReports = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -140,41 +145,20 @@ export const getReports = async (req: Request, res: Response): Promise<void> => 
             filter.status = status as ReportStatus;
         }
 
-        // ISOLASI DATA BERBASIS PERAN (Information Expert) [3]
-        switch (req.user.role) {
-            case UserRole.PETUGAS_LAPANGAN:
-                // FASE 1: Perbaikan Filter Otorisasi Identitas (Menghindari Filter Mismatch)
-                // Mengumpulkan UUID asli (req.user.id) dan ID Petugas fallback jika ada
-                const validInspectorIds = [req.user.id];
-                if (req.user.officerId) {
-                    validInspectorIds.push(req.user.officerId);
-                }
-
-                // Prisma akan mencari laporan yang inspektur-nya cocok dengan salah satu dari ID tersebut
-                filter.inspection = {
-                    inspectorId: { in: validInspectorIds }
-                };
-                break;
-
-            case UserRole.AUDITOR:
-                // Pimpinan/Auditor HANYA bisa menarik data laporan yang sedang diselidiki
-                // atau sudah selesai (memfilter data PENDING/REJECTED/VERIFIED).
-                filter.status = { in: [ReportStatus.INVESTIGATING, ReportStatus.RESOLVED] };
-                break;
-
-            case UserRole.ADMIN_DLH:
-            case UserRole.SUPER_ADMIN:
-            default:
-                // Admin & Super Admin melihat semua data secara global.
-                break;
+        // PROTEKSI OTORISASI: Hanya Admin DLH dan Super Admin yang diizinkan mengakses data arsip aduan warga
+        if (req.user.role !== UserRole.ADMIN_DLH && req.user.role !== UserRole.SUPER_ADMIN) {
+            res.status(403).json({
+                success: false,
+                message: 'Forbidden: Akses ditolak. Hanya Admin verifikator yang diizinkan membuka arsip pengaduan publik.'
+            });
+            return;
         }
 
+        // Melakukan penarikan data mentah pengaduan
         const reports = await prisma.citizenReport.findMany({
             where: filter,
-            orderBy: { createdAt: 'desc' },
-            include: {
-                inspection: true // Bawa data surat tugas jika sudah diverifikasi
-            }
+            orderBy: { createdAt: 'desc' }
+            // include: { inspection: true } DIHAPUS karena relasi fisik telah diputus di schema.prisma [3]
         });
 
         res.status(200).json({ success: true, data: reports });
@@ -185,138 +169,8 @@ export const getReports = async (req: Request, res: Response): Promise<void> => 
 };
 
 /**
- * [PROTECTED: ADMIN] Verifikasi dan Konversi menjadi Surat Tugas
- * GRASP: Controller & Transactional Cohesion
- */
-export const verifyAndCreateInspection = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { id } = req.params;
-        const { inspectorId, inspectorName, date, companyId, adminNotes } = req.body;
-
-        if (!inspectorId || !inspectorName || !date) {
-            res.status(400).json({ success: false, message: 'Data penugasan inspeksi (petugas, tanggal) wajib diisi.' });
-            return;
-        }
-
-        const report = await prisma.citizenReport.findUnique({ where: { id } });
-        if (!report) {
-            res.status(404).json({ success: false, message: 'Laporan tidak ditemukan.' });
-            return;
-        }
-
-        if (report.status !== ReportStatus.PENDING) {
-            res.status(400).json({ success: false, message: `Laporan tidak bisa diverifikasi karena status saat ini: ${report.status}` });
-            return;
-        }
-
-        // Penerapan Null Object Pattern: Jika companyId kosong, otomatis dialokasikan ke COM-UNKNOWN [3]
-        const finalCompanyId = companyId && companyId.trim() !== '' ? companyId : 'COM-UNKNOWN';
-
-        // Menggunakan Prisma Transaction agar data konsisten (All or Nothing)
-        const result = await prisma.$transaction(async (tx) => {
-            // 1. Buat surat tugas Inspeksi baru
-            const newInspection = await tx.inspection.create({
-                data: {
-                    companyId: finalCompanyId,
-                    inspectorId,
-                    inspectorName,
-                    date,
-                    location: `${report.lat},${report.lng}`,
-                    notes: `Inspeksi berdasarkan Pengaduan Masyarakat (ID: ${report.trackingId}). Keluhan: ${report.incidentType}`,
-                    status: 'Terjadwal',
-                }
-            });
-
-            // 2. Update status Laporan Masyarakat ke VERIFIED dan ikatkan ID inspeksi
-            const updatedReport = await tx.citizenReport.update({
-                where: { id },
-                data: {
-                    status: ReportStatus.VERIFIED,
-                    adminNotes: adminNotes || 'Laporan valid. Surat Tugas diterbitkan, menunggu keberangkatan petugas.',
-                    inspectionId: newInspection.id
-                }
-            });
-
-            return { newInspection, updatedReport };
-        });
-
-        // Catat aktivitas verifikasi ke Audit Log jika admin terautentikasi
-        if (req.user) {
-            await prisma.auditLog.create({
-                data: {
-                    user: req.user.email,
-                    role: req.user.role,
-                    action: `Memverifikasi pengaduan ${report.trackingId} dan menerbitkan Surat Tugas Inspeksi ${result.newInspection.id}`,
-                },
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: 'Laporan berhasil diverifikasi dan Surat Tugas Inspeksi telah diterbitkan.',
-            data: result
-        });
-    } catch (error: any) {
-        console.error('Error in verifyAndCreateInspection:', error);
-        res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
-    }
-};
-
-/**
- * [PROTECTED: OFFICER/ADMIN] Memulai Penyelidikan di Lapangan (Sidak/Patroli)
- * GRASP: Controller & State Pattern (Mengatur perpindahan status ke INVESTIGATING)
- */
-export const startInvestigation = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { id } = req.params;
-
-        const report = await prisma.citizenReport.findUnique({ where: { id } });
-        if (!report) {
-            res.status(404).json({ success: false, message: 'Laporan tidak ditemukan.' });
-            return;
-        }
-
-        if (report.status !== ReportStatus.VERIFIED) {
-            res.status(400).json({
-                success: false,
-                message: `Penyelidikan tidak dapat dimulai karena status laporan saat ini: ${report.status}`
-            });
-            return;
-        }
-
-        // Ubah status ke INVESTIGATING
-        const updatedReport = await prisma.citizenReport.update({
-            where: { id },
-            data: {
-                status: ReportStatus.INVESTIGATING,
-                adminNotes: 'Petugas lapangan sedang mengarah dan melakukan sidak ke titik pengaduan.'
-            }
-        });
-
-        // Catat pergerakan petugas ke Audit Log
-        if (req.user) {
-            await prisma.auditLog.create({
-                data: {
-                    user: req.user.email,
-                    role: req.user.role,
-                    action: `Memulai inspeksi fisik di lapangan atas laporan warga ${report.trackingId}`,
-                },
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: 'Status laporan berhasil diperbarui menjadi INVESTIGATING. Patroli diaktifkan.',
-            data: updatedReport
-        });
-    } catch (error: any) {
-        console.error('Error in startInvestigation:', error);
-        res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
-    }
-};
-
-/**
- * [PROTECTED: ADMIN] Tolak Laporan (Spam/Hoax)
+ * [PROTECTED: ADMIN] Tolak Laporan / Arsipkan sebagai Spam (Spam/Hoax)
+ * Membantu Admin menyaring/mengarsipkan laporan statis yang terbukti palsu.
  */
 export const rejectReport = async (req: Request, res: Response): Promise<void> => {
     try {

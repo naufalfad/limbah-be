@@ -1,5 +1,9 @@
 import { Router } from 'express';
-import { getExecutiveAnalytics, getPerformanceAnalytics } from '../controllers/analyticsController';
+import {
+    getExecutiveAnalytics,
+    getPerformanceAnalytics,
+    getAqiTelemetry // IMPOR BARU: Kontroler penarik data telemetri kualitas udara
+} from '../controllers/analyticsController';
 import { requireAuth, requireRoles } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
 
@@ -19,6 +23,14 @@ router.get(
     requireAuth,
     requireRoles(UserRole.SUPER_ADMIN, UserRole.AUDITOR),
     getPerformanceAnalytics
+);
+
+// Rute Baru: Mengambil telemetri kualitas udara & cuaca real-time berdasarkan koordinat GIS.
+// Diproteksi oleh requireAuth agar API key aman dan data hanya dapat dikonsumsi oleh pengguna sistem yang sah.
+router.get(
+    '/aqi',
+    requireAuth,
+    getAqiTelemetry
 );
 
 export default router;

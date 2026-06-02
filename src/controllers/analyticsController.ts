@@ -1,7 +1,54 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { IqairService } from '../services/iqairService';
 
 const prisma = new PrismaClient();
+
+/**
+ * [NEW CONTROLLER] Mengambil data telemetri Kualitas Udara (AQI) dan Cuaca Real-time
+ * berdasarkan koordinat spasial (latitude & longitude) dari Frontend.
+ * GRASP: Controller & High Cohesion
+ */
+export async function getAqiTelemetry(req: Request, res: Response) {
+    try {
+        const lat = req.query.lat as string;
+        const lng = req.query.lng as string;
+
+        // Validasi parameter wajib (Guard Clause)
+        if (!lat || !lng) {
+            return res.status(400).json({
+                success: false,
+                error: 'Parameter geospasial lat (latitude) dan lng (longitude) wajib disertakan.'
+            });
+        }
+
+        // Melakukan sanitasi tipe float dasar
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
+
+        if (isNaN(latNum) || isNaN(lngNum)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Format koordinat tidak valid. Harus berupa angka desimal.'
+            });
+        }
+
+        // Memanggil lapisan Indirection (iqairService) yang memegang algoritma cache & fallback
+        const telemetryData = await IqairService.getTelemetryByCoords(lat, lng);
+
+        return res.status(200).json({
+            success: true,
+            data: telemetryData
+        });
+
+    } catch (error: any) {
+        console.error('Get AQI telemetry controller error:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Internal server error'
+        });
+    }
+}
 
 /**
  * Menghitung KPI Eksekutif, Tren Limbah Mingguan, 

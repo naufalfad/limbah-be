@@ -1,22 +1,25 @@
+// prisma/seed.ts
 import {
   PrismaClient,
   UserRole,
   CompanyStatus,
   DocType,
-  WasteLogStatus,
-  PickupStatus,
-  InvoiceType,
-  InvoiceStatus,
-  InspectionStatus,
-  NotificationType
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { companiesMasterData } from './data/companiesMaster';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Clearing database...');
-  // Pengosongan data diatur berurutan untuk menghindari kegagalan integritas referensi (Foreign Key Constraint)
+
+  // =================================================================================
+  // URUTAN PENGOSONGAN DATA (Integritas Konstrain):
+  // 1. CitizenReport di-decouple sepenuhnya, sehingga aman dihapus kapan saja.
+  // 2. Inspection wajib dihapus SEBELUM Company karena ada aturan onDelete: Restrict.
+  // 3. Seluruh detail transaksi (Invoice, PickupRequest, WasteLog) dibersihkan.
+  // 4. Company dihapus sebelum User (PIC) dibersihkan.
+  // =================================================================================
   await prisma.citizenReport.deleteMany();
   await prisma.inspection.deleteMany();
   await prisma.invoice.deleteMany();
@@ -38,7 +41,7 @@ async function main() {
   const transporterPassword = await bcrypt.hash('password123', saltRounds);
 
   // 1. Seed Akun Pengguna (System Users)
-  const superAdmin = await prisma.user.create({
+  await prisma.user.create({
     data: {
       name: 'Super Administrator',
       email: 'sa@geocitra.com',
@@ -47,7 +50,7 @@ async function main() {
     },
   });
 
-  const adminDlh = await prisma.user.create({
+  await prisma.user.create({
     data: {
       name: 'Admin Verifikator DLH',
       email: 'dlh@geocitra.com',
@@ -56,7 +59,7 @@ async function main() {
     },
   });
 
-  const auditor = await prisma.user.create({
+  await prisma.user.create({
     data: {
       name: 'Kepala Dinas Lingkungan Hidup',
       email: 'auditor@geocitra.com',
@@ -65,7 +68,7 @@ async function main() {
     },
   });
 
-  const officer = await prisma.user.create({
+  await prisma.user.create({
     data: {
       name: 'Heryanto, S.T.',
       email: 'petugas@geocitra.com',
@@ -75,10 +78,10 @@ async function main() {
     },
   });
 
-  const budi = await prisma.user.create({
+  await prisma.user.create({
     data: {
       id: 'USER-005',
-      name: 'Budi (PT. Tekstil)',
+      name: 'Budi Santoso',
       email: 'user@geocitra.com',
       password: budiPassword,
       role: UserRole.PERUSAHAAN,
@@ -86,7 +89,7 @@ async function main() {
     },
   });
 
-  const transporter = await prisma.user.create({
+  await prisma.user.create({
     data: {
       name: 'PT. Transport Limbah Indonesia',
       email: 'transporter@geocitra.com',
@@ -95,11 +98,9 @@ async function main() {
     },
   });
 
-  console.log('Seeding companies and placeholder entities...');
+  console.log('Seeding companies and spatial data (Kotawaringin Timur)...');
 
-  // 2. SEED ENTITAS TIRUAN: Null Object Pattern (COM-UNKNOWN) [3]
-  // Digunakan sebagai penampung sementara bagi penugasan inspeksi yang titik koordinatnya 
-  // dilaporkan oleh warga tanpa diketahui nama perusahaannya saat proses triage [3].
+  // 2. SEED ENTITAS TIRUAN: Null Object Pattern (COM-UNKNOWN)
   await prisma.company.create({
     data: {
       id: 'COM-UNKNOWN',
@@ -120,45 +121,20 @@ async function main() {
       investment: 0.0,
       landArea: 0.0,
       employees: 0,
-      lat: '-6.9147',
-      lng: '107.6098',
-      address: 'Lokasi Belum Teridentifikasi',
+      lat: '-2.5337',
+      lng: '112.9515',
+      address: 'Lokasi Belum Teridentifikasi (Kotawaringin Timur)',
       docType: DocType.SPPL,
       status: CompanyStatus.APPROVED,
     },
   });
 
-  // 3. SEED PERUSAHAAN BUDI: PT. Tekstil Sejahtera (COM-001)
-  // Berfungsi untuk sinkronisasi data master operasional antara FE dan BE
-  await prisma.company.create({
-    data: {
-      id: 'COM-001',
-      companyName: 'PT. Tekstil Sejahtera',
-      nib: '9120301294821',
-      npwp: '01.234.567.8-401.000',
-      picName: 'Budi Santoso',
-      picPhone: '08123456789',
-      picRole: 'Direktur',
-      investmentType: 'PMDN',
-      yearBuilt: '2018',
-      buildingArea: 2500.0,
-      operationalHours: '24 Jam',
-      rawMaterials: 'Kapas, Zat Pewarna Kimia',
-      waterSource: 'PDAM & Sumur Bor',
-      powerSource: 'PLN 150 kVA',
-      kbli: '13111',
-      investment: 8500000000.0,
-      landArea: 6000.0,
-      employees: 120,
-      lat: '-6.9147',
-      lng: '107.6098',
-      address: 'Jl. Rancaekek KM 15, Kec. Cicadas, Bandung',
-      docType: DocType.UKL_UPL,
-      status: CompanyStatus.APPROVED,
-      score: 85.0,
-      picId: 'USER-005', // Terikat ke akun pengguna Budi (USER-005)
-    },
-  });
+  // 3. Iterasi Injeksi Database via Modul Eksternal
+  for (const comp of companiesMasterData) {
+    await prisma.company.create({
+      data: comp,
+    });
+  }
 
   console.log('Database seeding completed successfully!');
 }
