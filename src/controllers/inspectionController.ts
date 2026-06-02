@@ -21,19 +21,45 @@ const createInspectionSchema = z.object({
   notes: z.string().optional(),
 });
 
-// Penerapan Payload Polymorphism
+const uklUplChecklistSchema = z.object({
+  sumberDampakStatus: z.enum(['SESUAI', 'TIDAK_SESUAI']).optional(),
+  sumberDampakNotes: z.string().optional().nullable(),
+  jenisDampakStatus: z.enum(['SESUAI', 'TIDAK_SESUAI']).optional(),
+  jenisDampakNotes: z.string().optional().nullable(),
+  besaranDampakStatus: z.enum(['SESUAI', 'TIDAK_SESUAI']).optional(),
+  besaranDampakNotes: z.string().optional().nullable(),
+  pengelolaanBentukStatus: z.enum(['SESUAI', 'TIDAK_SESUAI']).optional(),
+  pengelolaanBentukNotes: z.string().optional().nullable(),
+  pengelolaanLokasiStatus: z.enum(['SESUAI', 'TIDAK_SESUAI']).optional(),
+  pengelolaanLokasiNotes: z.string().optional().nullable(),
+  pengelolaanPeriodeStatus: z.enum(['SESUAI', 'TIDAK_SESUAI']).optional(),
+  pengelolaanPeriodeNotes: z.string().optional().nullable(),
+  pemantauanBentukStatus: z.enum(['SESUAI', 'TIDAK_SESUAI']).optional(),
+  pemantauanBentukNotes: z.string().optional().nullable(),
+  pemantauanLokasiStatus: z.enum(['SESUAI', 'TIDAK_SESUAI']).optional(),
+  pemantauanLokasiNotes: z.string().optional().nullable(),
+  pemantauanPeriodeStatus: z.enum(['SESUAI', 'TIDAK_SESUAI']).optional(),
+  pemantauanPeriodeNotes: z.string().optional().nullable(),
+  institusiStatus: z.enum(['SESUAI', 'TIDAK_SESUAI']).optional(),
+  institusiNotes: z.string().optional().nullable(),
+  keteranganStatus: z.enum(['SESUAI', 'TIDAK_SESUAI']).optional(),
+  keteranganNotes: z.string().optional().nullable(),
+});
+
+const spplChecklistSchema = z.object({
+  spplBersih: z.boolean(),
+  spplBebasLimbah: z.boolean(),
+  spplDrainase: z.boolean(),
+  spplBebasBakar: z.boolean(),
+  spplTempatSampah: z.boolean(),
+});
+
 const submitInspectionSchema = z.object({
   score: z.number().min(0).max(100).nullable().optional(),
   notes: z.string().optional(),
   photo: z.string().optional(),
-  checklist: z.object({
-    tpsB3: z.boolean(),
-    ipal: z.boolean(),
-    apar: z.boolean(),
-    noise: z.boolean(),
-    safetyEquipment: z.boolean(),
-  }).nullable().optional(),
-  correctedCompanyId: z.string().optional(), // Parameter Rebinding Pelanggar untuk COM-UNKNOWN
+  checklist: z.union([uklUplChecklistSchema, spplChecklistSchema]).nullable().optional(),
+  correctedCompanyId: z.string().optional(),
 });
 
 /**

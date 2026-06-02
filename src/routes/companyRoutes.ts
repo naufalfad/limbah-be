@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createCompany, getCompanies, getCompanyById, updateCompanyStatus, downloadCertificatePdf, createRetribusiInvoice, updateCompany, createManualAmdalCompany } from '../controllers/companyController';
+import { createCompany, getCompanies, getCompanyById, updateCompanyStatus, downloadCertificatePdf, createRetribusiInvoice, updateCompany, createManualAmdalCompany, getCompanyPreview } from '../controllers/companyController';
 import { requireAuth, requireRoles } from '../middlewares/auth';
 import { companyDocUpload } from '../middlewares/upload';
 import { UserRole } from '@prisma/client';
@@ -15,6 +15,7 @@ router.post(
   createManualAmdalCompany
 );
 router.get('/', requireAuth, getCompanies);
+router.get('/:id/preview', requireAuth, getCompanyPreview);
 router.get('/:id', requireAuth, getCompanyById);
 router.get('/:id/certificate/pdf', requireAuth, downloadCertificatePdf);
 router.post('/:id/retribusi-invoice', requireAuth, createRetribusiInvoice);
