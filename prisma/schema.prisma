@@ -163,7 +163,7 @@ model PickupRequest {
   wasteType       String
   volume          String       // Contoh: "45 L"
   date            String       // Format: YYYY-MM-DD
-  status          PickupStatus @default(PENDING)
+  status          PickupStatus @default(PENDING) // FIX: Sintaksis tipe enum dibersihkan dari React braces
   transporterId   String?      // Contoh: "TRANS-001"
   transporterName String?
   cost            Float?       // Biaya pengangkutan (setelah dihitung otomatis atau diisi Admin DLH)
@@ -260,4 +260,20 @@ model AuditLog {
   user      String
   role      String
   action    String
+}
+
+// ============================================================================
+// MODEL BARU: AQI CACHE SERVER (Information Expert & Protected Variations)
+// Menyimpan data telemetri kualitas udara dan cuaca historis dari stasiun klaster.
+// ============================================================================
+model AqiCache {
+  id        String   @id @default(uuid())
+  clusterId String   @unique // Contoh: 'cluster-citeureup'
+  name      String
+  lat       String
+  lng       String
+  aqi       Int
+  weather   Json     // Menyimpan parameter cuaca (suhu, kelembapan, angin, tekanan)
+  source    String   // 'live' | 'simulation'
+  updatedAt DateTime @updatedAt
 }

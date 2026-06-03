@@ -51,6 +51,29 @@ export async function getAqiTelemetry(req: Request, res: Response) {
 }
 
 /**
+ * [NEW CONTROLLER FUNCTION] Mengambil seluruh data telemetri kualitas udara batch
+ * dari 7 stasiun klaster Kabupaten Bogor tanpa parameter koordinat eksternal.
+ * GRASP: Controller, Indirection, & High Cohesion
+ */
+export async function getBatchAqiTelemetry(req: Request, res: Response) {
+    try {
+        // Mendelegasikan pencarian batch langsung ke Service Layer (Information Expert)
+        const batchData = await IqairService.getBatchTelemetry();
+
+        return res.status(200).json({
+            success: true,
+            data: batchData
+        });
+    } catch (error: any) {
+        console.error('Get batch AQI telemetry controller error:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Internal server error'
+        });
+    }
+}
+
+/**
  * Menghitung KPI Eksekutif, Tren Limbah Mingguan, 
  * dan Distribusi Kepatuhan Spasial untuk Pimpinan (Auditor).
  */

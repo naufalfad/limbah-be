@@ -98,7 +98,7 @@ async function main() {
     },
   });
 
-  console.log('Seeding companies and spatial data (Kotawaringin Timur)...');
+  console.log('Seeding companies and spatial data (Kabupaten Bogor)...');
 
   // 2. SEED ENTITAS TIRUAN: Null Object Pattern (COM-UNKNOWN)
   await prisma.company.create({
@@ -121,9 +121,9 @@ async function main() {
       investment: 0.0,
       landArea: 0.0,
       employees: 0,
-      lat: '-2.5337',
-      lng: '112.9515',
-      address: 'Lokasi Belum Teridentifikasi (Kotawaringin Timur)',
+      lat: '-6.4816', // Relokasi pusat koordinat ke Cibinong
+      lng: '106.8560',
+      address: 'Lokasi Belum Teridentifikasi (Kabupaten Bogor)',
       docType: DocType.SPPL,
       status: CompanyStatus.APPROVED,
     },

@@ -2,7 +2,8 @@ import { Router } from 'express';
 import {
     getExecutiveAnalytics,
     getPerformanceAnalytics,
-    getAqiTelemetry // IMPOR BARU: Kontroler penarik data telemetri kualitas udara
+    getAqiTelemetry,
+    getBatchAqiTelemetry // IMPOR BARU: Kontroler penarik data batch telemetri kualitas udara
 } from '../controllers/analyticsController';
 import { requireAuth, requireRoles } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
@@ -31,6 +32,14 @@ router.get(
     '/aqi',
     requireAuth,
     getAqiTelemetry
+);
+
+// Rute Baru: Mengambil data batch telemetri kualitas udara untuk seluruh 7 klaster industri Kabupaten Bogor.
+// Diproteksi oleh requireAuth agar penggunaan API key hemat, aman dari kebocoran, dan terisolasi untuk internal sistem.
+router.get(
+    '/aqi-batch',
+    requireAuth,
+    getBatchAqiTelemetry
 );
 
 export default router;
