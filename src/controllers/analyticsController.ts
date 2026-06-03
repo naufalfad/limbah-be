@@ -241,6 +241,7 @@ export async function getPerformanceAnalytics(req: Request, res: Response) {
 
         const ssplCount = docTypes.find(d => d.docType === 'SPPL')?._count.id || 0;
         const uklUplCount = docTypes.find(d => d.docType === 'UKL_UPL')?._count.id || 0;
+        const amdalCount = docTypes.find(d => d.docType === 'AMDAL')?._count.id || 0;
 
         return res.status(200).json({
             success: true,
@@ -251,7 +252,8 @@ export async function getPerformanceAnalytics(req: Request, res: Response) {
                 recentInspections,
                 documentComposition: {
                     sppl: ssplCount,
-                    uklUpl: uklUplCount
+                    uklUpl: uklUplCount,
+                    amdal: amdalCount
                 }
             }
         });

@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import { PrismaClient, CompanyStatus, DocType, UserRole, NotificationType, InvoiceType, InvoiceStatus } from '@prisma/client';
 import { z } from 'zod';
 import PDFDocument from 'pdfkit';
+import { parseExcelBuffer } from '../utils/excelParser';
+import fs from 'fs';
+import path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -60,6 +63,19 @@ export async function createCompany(req: Request, res: Response) {
     const docSiteplanUrl = files?.['siteplanDoc']?.[0]
       ? `/uploads/companies/${files['siteplanDoc'][0].filename}`
       : null;
+    const docTemplateUrl = files?.['docTemplate']?.[0]
+      ? `/uploads/companies/${files['docTemplate'][0].filename}`
+      : null;
+
+    let parsedTemplateData: any = null;
+    if (docType === DocType.UKL_UPL && files?.['docTemplate']?.[0]) {
+      try {
+        const fileBuffer = fs.readFileSync(files['docTemplate'][0].path);
+        parsedTemplateData = await parseExcelBuffer(fileBuffer);
+      } catch (parseErr) {
+        console.error('Gagal mengurai template Excel pada saat upload:', parseErr);
+      }
+    }
 
     const company = await prisma.company.create({
       data: {
@@ -70,6 +86,8 @@ export async function createCompany(req: Request, res: Response) {
         ...(docNibUrl && { docNibUrl }),
         ...(docNpwpUrl && { docNpwpUrl }),
         ...(docSiteplanUrl && { docSiteplanUrl }),
+        ...(docTemplateUrl && { docTemplateUrl }),
+        ...(parsedTemplateData && { parsedTemplateData }),
       },
     });
 
@@ -449,6 +467,23 @@ export async function updateCompany(req: Request, res: Response) {
     const docSiteplanUrl = files?.['siteplanDoc']?.[0]
       ? `/uploads/companies/${files['siteplanDoc'][0].filename}`
       : company.docSiteplanUrl; // keep old file if no new upload
+    const docTemplateUrl = files?.['docTemplate']?.[0]
+      ? `/uploads/companies/${files['docTemplate'][0].filename}`
+      : company.docTemplateUrl; // keep old file if no new upload
+
+    let parsedTemplateData: any = company.parsedTemplateData;
+    if (docType === DocType.UKL_UPL) {
+      if (files?.['docTemplate']?.[0]) {
+        try {
+          const fileBuffer = fs.readFileSync(files['docTemplate'][0].path);
+          parsedTemplateData = await parseExcelBuffer(fileBuffer);
+        } catch (parseErr) {
+          console.error('Gagal mengurai template Excel pada saat upload revisi:', parseErr);
+        }
+      }
+    } else {
+      parsedTemplateData = null;
+    }
 
     const updatedCompany = await prisma.company.update({
       where: { id },
@@ -459,6 +494,8 @@ export async function updateCompany(req: Request, res: Response) {
         docNibUrl,
         docNpwpUrl,
         docSiteplanUrl,
+        docTemplateUrl,
+        parsedTemplateData,
       },
     });
 
@@ -489,3 +526,158 @@ export async function updateCompany(req: Request, res: Response) {
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }
+
+const createManualAmdalSchema = z.object({
+  companyName: z.string().min(2),
+  nib: z.string().min(5),
+  npwp: z.string().optional(),
+  lat: z.string(),
+  lng: z.string(),
+  address: z.string().min(5),
+  docTemplateUrl: z.string().optional().nullable(),
+});
+
+export async function createManualAmdalCompany(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const parsed = createManualAmdalSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.errors });
+    }
+
+    const data = parsed.data;
+
+    // Set certificate validity period (1 year from now)
+    const activeUntilDate = new Date();
+    activeUntilDate.setFullYear(activeUntilDate.getFullYear() + 1);
+    const certificateActiveUntil = activeUntilDate.toISOString().split('T')[0];
+
+    const company = await prisma.company.create({
+      data: {
+        companyName: data.companyName,
+        nib: data.nib,
+        npwp: data.npwp || '-',
+        lat: data.lat,
+        lng: data.lng,
+        address: data.address,
+        docType: DocType.AMDAL,
+        status: CompanyStatus.APPROVED,
+        certificateActiveUntil,
+        docTemplateUrl: data.docTemplateUrl || null,
+        
+        // Manual AMDAL fallbacks for required fields
+        picName: 'Admin DLH Manual',
+        picPhone: '-',
+        picRole: 'Admin',
+        investmentType: 'PMDN',
+        yearBuilt: String(new Date().getFullYear()),
+        buildingArea: 0,
+        operationalHours: '-',
+        rawMaterials: '-',
+        waterSource: '-',
+        powerSource: '-',
+        kbli: '00000',
+        investment: 0,
+        landArea: 0,
+        employees: 0,
+      },
+    });
+
+    // Create system notification
+    await prisma.systemNotification.create({
+      data: {
+        title: 'Registrasi AMDAL Manual',
+        message: `Admin DLH telah mendaftarkan koordinat wajib AMDAL untuk ${company.companyName} secara manual.`,
+        type: NotificationType.SUCCESS,
+      },
+    });
+
+    // Write audit log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.email,
+        role: req.user.role,
+        action: `Mendaftarkan perusahaan wajib AMDAL secara manual: ${company.companyName} (${company.id})`,
+      },
+    });
+
+    return res.status(201).json({ success: true, company });
+  } catch (error: any) {
+    console.error('Create manual AMDAL company error:', error);
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, error: 'NIB already registered' });
+    }
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+export async function getCompanyPreview(req: Request, res: Response) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+
+    const company = await prisma.company.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        companyName: true,
+        docType: true,
+        docTemplateUrl: true,
+        parsedTemplateData: true,
+        picId: true
+      }
+    });
+
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    // Hanya file Excel (UKL-UPL) yang didukung untuk endpoint preview terstruktur ini
+    if (company.docType !== DocType.UKL_UPL) {
+      return res.status(400).json({ success: false, error: 'Preview terstruktur hanya didukung untuk berkas UKL-UPL (Excel).' });
+    }
+
+    // Hubungkan isolasi multi-tenant bagi perwakilan perusahaan
+    if (req.user.role === UserRole.PERUSAHAAN && company.picId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    // Cek jika data pratinjau sudah terurai di database
+    if (company.parsedTemplateData) {
+      return res.status(200).json({ success: true, data: company.parsedTemplateData });
+    }
+
+    // Skenario Fallback: Lazy Parsing untuk Berkas Lama (Legacy File)
+    if (!company.docTemplateUrl) {
+      return res.status(404).json({ success: false, error: 'Berkas template belum diunggah oleh perusahaan.' });
+    }
+
+    const absoluteFilePath = path.join(process.cwd(), company.docTemplateUrl);
+    if (!fs.existsSync(absoluteFilePath)) {
+      return res.status(404).json({ success: false, error: 'File Excel fisik tidak ditemukan di server.' });
+    }
+
+    // Lakukan parsing on-the-fly
+    const fileBuffer = fs.readFileSync(absoluteFilePath);
+    const parsedData = await parseExcelBuffer(fileBuffer);
+
+    // Lakukan self-healing: Update database agar request berikutnya berjalan sangat cepat
+    await prisma.company.update({
+      where: { id },
+      data: { parsedTemplateData: parsedData as any }
+    });
+
+    return res.status(200).json({ success: true, data: parsedData });
+  } catch (error) {
+    console.error('Get company preview error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+}
+
+

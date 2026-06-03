@@ -27,6 +27,7 @@ enum CompanyStatus {
 enum DocType {
   SPPL
   UKL_UPL @map("UKL-UPL")
+  AMDAL
 }
 
 enum WasteLogStatus {
@@ -126,6 +127,8 @@ model Company {
   docNibUrl        String?       // Path/URL file scan NIB
   docNpwpUrl       String?       // Path/URL file scan NPWP
   docSiteplanUrl   String?       // Path/URL file Siteplan Layout (opsional)
+  docTemplateUrl   String?       // Path/URL file completed matrix template (UKL-UPL / SPPL)
+  parsedTemplateData Json?       // Menyimpan hasil parse Excel terstruktur
   certificateActiveUntil String? // Masa berlaku izin (YYYY-MM-DD)
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
