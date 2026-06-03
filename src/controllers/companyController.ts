@@ -529,12 +529,18 @@ export async function updateCompany(req: Request, res: Response) {
 
 const createManualAmdalSchema = z.object({
   companyName: z.string().min(2),
-  nib: z.string().min(5),
-  npwp: z.string().optional(),
+  activityName: z.string().min(2),
+  address: z.string().min(5),
   lat: z.string(),
   lng: z.string(),
-  address: z.string().min(5),
-  docTemplateUrl: z.string().optional().nullable(),
+  envApprovalNo: z.string().min(2),
+  envApprovalDate: z.string(),
+  amdalNo: z.string().min(2),
+  amdalYear: z.string().min(4),
+  businessSector: z.string().min(2),
+  status: z.string().optional(),
+  nib: z.string().optional(),
+  npwp: z.string().optional(),
 });
 
 export async function createManualAmdalCompany(req: Request, res: Response) {
@@ -550,30 +556,106 @@ export async function createManualAmdalCompany(req: Request, res: Response) {
 
     const data = parsed.data;
 
+    // Extract uploaded files from Multer
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const docAndalUrl = files?.['andalDoc']?.[0]
+      ? `/uploads/companies/${files['andalDoc'][0].filename}`
+      : null;
+    const docRklUrl = files?.['rklDoc']?.[0]
+      ? `/uploads/companies/${files['rklDoc'][0].filename}`
+      : null;
+    const docRplUrl = files?.['rplDoc']?.[0]
+      ? `/uploads/companies/${files['rplDoc'][0].filename}`
+      : null;
+    const docSkKelayakanUrl = files?.['skKelayakanDoc']?.[0]
+      ? `/uploads/companies/${files['skKelayakanDoc'][0].filename}`
+      : null;
+    const docPersetujuanUrl = files?.['persetujuanDoc']?.[0]
+      ? `/uploads/companies/${files['persetujuanDoc'][0].filename}`
+      : null;
+
+    // Strict File Validation
+    if (!files || !files['andalDoc']?.[0] || !files['rklDoc']?.[0] || !files['rplDoc']?.[0]) {
+      return res.status(400).json({ success: false, error: 'File ANDAL (PDF), Matriks RKL (Excel), dan Matriks RPL (Excel) wajib diunggah.' });
+    }
+
+    if (!docAndalUrl) {
+      return res.status(400).json({ success: false, error: 'File ANDAL (PDF) wajib diunggah.' });
+    }
+    if (!docRklUrl) {
+      return res.status(400).json({ success: false, error: 'File Matriks RKL (Excel) wajib diunggah.' });
+    }
+    if (!docRplUrl) {
+      return res.status(400).json({ success: false, error: 'File Matriks RPL (Excel) wajib diunggah.' });
+    }
+
+    const isExcelMime = (mime: string) => [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel'
+    ].includes(mime);
+
+    if (!isExcelMime(files['rklDoc'][0].mimetype) || !isExcelMime(files['rplDoc'][0].mimetype)) {
+      return res.status(400).json({ success: false, error: 'File Matriks RKL dan RPL harus berupa berkas Excel (.xlsx / .xls).' });
+    }
+
+    // Parse Excel matrices (RKL & RPL)
+    let parsedRklData: any = null;
+    try {
+      const fileBuffer = fs.readFileSync(files['rklDoc'][0].path);
+      parsedRklData = await parseExcelBuffer(fileBuffer);
+    } catch (parseErr) {
+      console.error('Gagal mengurai RKL Excel:', parseErr);
+    }
+
+    let parsedRplData: any = null;
+    try {
+      const fileBuffer = fs.readFileSync(files['rplDoc'][0].path);
+      parsedRplData = await parseExcelBuffer(fileBuffer);
+    } catch (parseErr) {
+      console.error('Gagal mengurai RPL Excel:', parseErr);
+    }
+
     // Set certificate validity period (1 year from now)
     const activeUntilDate = new Date();
     activeUntilDate.setFullYear(activeUntilDate.getFullYear() + 1);
     const certificateActiveUntil = activeUntilDate.toISOString().split('T')[0];
 
+    // Auto-generate NIB if not provided
+    const nib = data.nib || `NIB-AMD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
     const company = await prisma.company.create({
       data: {
         companyName: data.companyName,
-        nib: data.nib,
+        activityName: data.activityName,
+        nib,
         npwp: data.npwp || '-',
         lat: data.lat,
         lng: data.lng,
         address: data.address,
+        envApprovalNo: data.envApprovalNo,
+        envApprovalDate: data.envApprovalDate,
+        amdalNo: data.amdalNo,
+        amdalYear: data.amdalYear,
+        businessSector: data.businessSector,
         docType: DocType.AMDAL,
-        status: CompanyStatus.APPROVED,
+        status: (data.status as CompanyStatus) || CompanyStatus.APPROVED,
         certificateActiveUntil,
-        docTemplateUrl: data.docTemplateUrl || null,
+        
+        docAndalUrl,
+        docRklUrl,
+        docRplUrl,
+        docSkKelayakanUrl,
+        docPersetujuanUrl,
+        
+        parsedRklData: parsedRklData ? (parsedRklData as any) : null,
+        parsedRplData: parsedRplData ? (parsedRplData as any) : null,
         
         // Manual AMDAL fallbacks for required fields
         picName: 'Admin DLH Manual',
         picPhone: '-',
         picRole: 'Admin',
         investmentType: 'PMDN',
-        yearBuilt: String(new Date().getFullYear()),
+        yearBuilt: data.amdalYear || String(new Date().getFullYear()),
         buildingArea: 0,
         operationalHours: '-',
         rawMaterials: '-',
@@ -621,6 +703,7 @@ export async function getCompanyPreview(req: Request, res: Response) {
     }
 
     const { id } = req.params;
+    const { type } = req.query; // 'rkl' or 'rpl'
 
     const company = await prisma.company.findUnique({
       where: { id },
@@ -629,7 +712,11 @@ export async function getCompanyPreview(req: Request, res: Response) {
         companyName: true,
         docType: true,
         docTemplateUrl: true,
+        docRklUrl: true,
+        docRplUrl: true,
         parsedTemplateData: true,
+        parsedRklData: true,
+        parsedRplData: true,
         picId: true
       }
     });
@@ -638,14 +725,55 @@ export async function getCompanyPreview(req: Request, res: Response) {
       return res.status(404).json({ success: false, error: 'Company not found' });
     }
 
-    // Hanya file Excel (UKL-UPL) yang didukung untuk endpoint preview terstruktur ini
-    if (company.docType !== DocType.UKL_UPL) {
-      return res.status(400).json({ success: false, error: 'Preview terstruktur hanya didukung untuk berkas UKL-UPL (Excel).' });
-    }
-
     // Hubungkan isolasi multi-tenant bagi perwakilan perusahaan
     if (req.user.role === UserRole.PERUSAHAAN && company.picId !== req.user.id) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    if (company.docType === DocType.AMDAL) {
+      if (type === 'rkl') {
+        if (company.parsedRklData) {
+          return res.status(200).json({ success: true, data: company.parsedRklData });
+        }
+        if (!company.docRklUrl) {
+          return res.status(404).json({ success: false, error: 'Berkas RKL belum diunggah.' });
+        }
+        const filePath = path.join(process.cwd(), company.docRklUrl);
+        if (!fs.existsSync(filePath)) {
+          return res.status(404).json({ success: false, error: 'Berkas RKL fisik tidak ditemukan di server.' });
+        }
+        const fileBuffer = fs.readFileSync(filePath);
+        const parsedData = await parseExcelBuffer(fileBuffer);
+        await prisma.company.update({
+          where: { id },
+          data: { parsedRklData: parsedData as any }
+        });
+        return res.status(200).json({ success: true, data: parsedData });
+      } else if (type === 'rpl') {
+        if (company.parsedRplData) {
+          return res.status(200).json({ success: true, data: company.parsedRplData });
+        }
+        if (!company.docRplUrl) {
+          return res.status(404).json({ success: false, error: 'Berkas RPL belum diunggah.' });
+        }
+        const filePath = path.join(process.cwd(), company.docRplUrl);
+        if (!fs.existsSync(filePath)) {
+          return res.status(404).json({ success: false, error: 'Berkas RPL fisik tidak ditemukan di server.' });
+        }
+        const fileBuffer = fs.readFileSync(filePath);
+        const parsedData = await parseExcelBuffer(fileBuffer);
+        await prisma.company.update({
+          where: { id },
+          data: { parsedRplData: parsedData as any }
+        });
+        return res.status(200).json({ success: true, data: parsedData });
+      } else {
+        return res.status(400).json({ success: false, error: 'Spesifikasi matriks AMDAL (?type=rkl atau ?type=rpl) wajib ditentukan.' });
+      }
+    }
+
+    if (company.docType !== DocType.UKL_UPL) {
+      return res.status(400).json({ success: false, error: 'Preview terstruktur hanya didukung untuk berkas UKL-UPL (Excel).' });
     }
 
     // Cek jika data pratinjau sudah terurai di database
