@@ -130,6 +130,26 @@ model Company {
   docTemplateUrl   String?       // Path/URL file completed matrix template (UKL-UPL / SPPL)
   parsedTemplateData Json?       // Menyimpan hasil parse Excel terstruktur
   certificateActiveUntil String? // Masa berlaku izin (YYYY-MM-DD)
+  
+  // AMDAL specific fields
+  activityName           String?
+  envApprovalNo          String?
+  envApprovalDate        String?
+  amdalNo                String?
+  amdalYear              String?
+  businessSector         String?
+  
+  // AMDAL files
+  docAndalUrl            String?
+  docRklUrl              String?
+  docRplUrl              String?
+  docSkKelayakanUrl      String?
+  docPersetujuanUrl      String?
+  
+  // AMDAL parsed data
+  parsedRklData          Json?
+  parsedRplData          Json?
+
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 

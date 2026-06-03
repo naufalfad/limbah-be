@@ -86,3 +86,18 @@ export const citizenReportUpload = multer({
     fileSize: 5 * 1024 * 1024, // Pembatasan ketat 5 MB per berkas foto
   },
 }).array('evidencePhotos', 5);
+
+// --- EXPORT MIDDLEWARE 3: DOKUMEN AMDAL (INJEKSI BARU) ---
+export const amdalDocUpload = multer({
+  storage: companyStorage,
+  fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10 MB limit for larger PDFs
+  },
+}).fields([
+  { name: 'andalDoc', maxCount: 1 },
+  { name: 'rklDoc', maxCount: 1 },
+  { name: 'rplDoc', maxCount: 1 },
+  { name: 'skKelayakanDoc', maxCount: 1 },
+  { name: 'persetujuanDoc', maxCount: 1 },
+]);

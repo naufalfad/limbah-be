@@ -220,6 +220,16 @@ export async function submitInspection(req: Request, res: Response) {
           where: { id: finalCompanyId },
           data: { score }
         });
+
+        // Hapus inspeksi lama yang buruk (score < 60) untuk menghindari redundansi data
+        await tx.inspection.deleteMany({
+          where: {
+            companyId: finalCompanyId,
+            id: { not: id },
+            status: InspectionStatus.Selesai,
+            score: { lt: 60 }
+          }
+        });
       }
 
       return { updatedInspection };

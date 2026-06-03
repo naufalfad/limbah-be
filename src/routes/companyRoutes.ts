@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createCompany, getCompanies, getCompanyById, updateCompanyStatus, downloadCertificatePdf, createRetribusiInvoice, updateCompany, createManualAmdalCompany, getCompanyPreview } from '../controllers/companyController';
 import { requireAuth, requireRoles } from '../middlewares/auth';
-import { companyDocUpload } from '../middlewares/upload';
+import { companyDocUpload, amdalDocUpload } from '../middlewares/upload';
 import { UserRole } from '@prisma/client';
 
 const router = Router();
@@ -12,6 +12,7 @@ router.post(
   '/manual-amdal',
   requireAuth,
   requireRoles(UserRole.SUPER_ADMIN, UserRole.ADMIN_DLH),
+  amdalDocUpload,
   createManualAmdalCompany
 );
 router.get('/', requireAuth, getCompanies);
