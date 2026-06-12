@@ -82,6 +82,19 @@ enum ReportStatus {
   REJECTED          // Spam / Hoax / Data tidak valid
 }
 
+// Enum Sumber Data Telemetri Air (Adapter Pattern)
+enum SourceType {
+  SIMULATED
+  PHYSICAL_IOT
+}
+
+// Enum Status Operasional Perangkat Sensor Fisik
+enum StationStatus {
+  ACTIVE
+  MAINTENANCE
+  OFFLINE
+}
+
 model User {
   id            String    @id @default(uuid())
   name          String
@@ -296,4 +309,33 @@ model AqiCache {
   weather   Json     // Menyimpan parameter cuaca (suhu, kelembapan, angin, tekanan)
   source    String   // 'live' | 'simulation'
   updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// [MODEL BARU] STASIUN PEMANTAUAN KUALITAS AIR SUNGAI (WaterStation_PT)
+// ============================================================================
+model WaterStation {
+  id            String             @id // Kita gunakan ID manual (WS-01, WS-02) agar sinkron dengan FE
+  name          String
+  lat           String             // Disamakan bertipe String sesuai koordinat Company
+  lng           String
+  sourceType    SourceType         @default(SIMULATED)
+  status        StationStatus      @default(ACTIVE)
+  deviceId      String?            @unique // Untuk kebutuhan integrasi fisik hardware IoT kelak
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  
+  telemetryLogs WaterTelemetryLog[]
+}
+
+model WaterTelemetryLog {
+  id            String             @id @default(uuid())
+  stationId     String
+  station       WaterStation       @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  month         String             // Jan, Feb, Mar, dsb.
+  bod           Float              // mg/L (BOD5 standar)
+  cod           Float              // mg/L
+  do            Float              // mg/L (Dissolved Oxygen)
+  ph            Float              // Derajat Keasaman
+  createdAt     DateTime           @default(now())
 }

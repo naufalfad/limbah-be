@@ -1,9 +1,12 @@
+// src/routes/analyticsRoutes.ts
 import { Router } from 'express';
 import {
     getExecutiveAnalytics,
     getPerformanceAnalytics,
     getAqiTelemetry,
-    getBatchAqiTelemetry // IMPOR BARU: Kontroler penarik data batch telemetri kualitas udara
+    getBatchAqiTelemetry, // IMPOR BARU: Kontroler penarik data batch telemetri kualitas udara
+    getWaterStations,     // [NEW IMPOR] Kontroler penarik stasiun kualitas air sungai
+    getWaterStationLogs   // [NEW IMPOR] Kontroler penarik log historis stasiun air
 } from '../controllers/analyticsController';
 import { requireAuth, requireRoles } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
@@ -40,6 +43,24 @@ router.get(
     '/aqi-batch',
     requireAuth,
     getBatchAqiTelemetry
+);
+
+// ============================================================================
+// [NEW ROUTES] API ENDPOINTS KEPATUHAN LIMBAH AIR SUNGAI (PHASE 1)
+// ============================================================================
+
+// Mengambil seluruh stasiun air Bogor lengkap dengan payload koordinat WGS84 ter-parsing desimal
+router.get(
+    '/water-stations',
+    requireAuth,
+    getWaterStations
+);
+
+// Mengambil log historis parameter air 12 bulan dari satu stasiun air spesifik
+router.get(
+    '/water-stations/:id/logs',
+    requireAuth,
+    getWaterStationLogs
 );
 
 export default router;

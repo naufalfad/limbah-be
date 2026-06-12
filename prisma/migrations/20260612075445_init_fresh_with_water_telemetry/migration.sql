@@ -5,7 +5,7 @@ CREATE TYPE "UserRole" AS ENUM ('SUPER_ADMIN', 'ADMIN_DLH', 'PETUGAS_LAPANGAN', 
 CREATE TYPE "CompanyStatus" AS ENUM ('PENDING', 'REVIEW', 'APPROVED', 'REJECTED', 'SUSPENDED');
 
 -- CreateEnum
-CREATE TYPE "DocType" AS ENUM ('SPPL', 'UKL-UPL');
+CREATE TYPE "DocType" AS ENUM ('SPPL', 'UKL-UPL', 'AMDAL');
 
 -- CreateEnum
 CREATE TYPE "WasteLogStatus" AS ENUM ('Terverifikasi', 'Proses Verifikasi', 'Terjadwal Pickup', 'Ditolak');
@@ -27,6 +27,12 @@ CREATE TYPE "NotificationType" AS ENUM ('WARNING', 'INFO', 'SUCCESS', 'DANGER');
 
 -- CreateEnum
 CREATE TYPE "ReportStatus" AS ENUM ('PENDING', 'VERIFIED', 'INVESTIGATING', 'RESOLVED', 'REJECTED');
+
+-- CreateEnum
+CREATE TYPE "SourceType" AS ENUM ('SIMULATED', 'PHYSICAL_IOT');
+
+-- CreateEnum
+CREATE TYPE "StationStatus" AS ENUM ('ACTIVE', 'MAINTENANCE', 'OFFLINE');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -75,7 +81,22 @@ CREATE TABLE "Company" (
     "docNibUrl" TEXT,
     "docNpwpUrl" TEXT,
     "docSiteplanUrl" TEXT,
+    "docTemplateUrl" TEXT,
+    "parsedTemplateData" JSONB,
     "certificateActiveUntil" TEXT,
+    "activityName" TEXT,
+    "envApprovalNo" TEXT,
+    "envApprovalDate" TEXT,
+    "amdalNo" TEXT,
+    "amdalYear" TEXT,
+    "businessSector" TEXT,
+    "docAndalUrl" TEXT,
+    "docRklUrl" TEXT,
+    "docRplUrl" TEXT,
+    "docSkKelayakanUrl" TEXT,
+    "docPersetujuanUrl" TEXT,
+    "parsedRklData" JSONB,
+    "parsedRplData" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "picId" TEXT,
@@ -167,7 +188,6 @@ CREATE TABLE "CitizenReport" (
     "evidencePhoto" TEXT NOT NULL,
     "status" "ReportStatus" NOT NULL DEFAULT 'PENDING',
     "adminNotes" TEXT,
-    "inspectionId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -197,6 +217,50 @@ CREATE TABLE "AuditLog" (
     CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "AqiCache" (
+    "id" TEXT NOT NULL,
+    "clusterId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "lat" TEXT NOT NULL,
+    "lng" TEXT NOT NULL,
+    "aqi" INTEGER NOT NULL,
+    "weather" JSONB NOT NULL,
+    "source" TEXT NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AqiCache_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WaterStation" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "lat" TEXT NOT NULL,
+    "lng" TEXT NOT NULL,
+    "sourceType" "SourceType" NOT NULL DEFAULT 'SIMULATED',
+    "status" "StationStatus" NOT NULL DEFAULT 'ACTIVE',
+    "deviceId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "WaterStation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WaterTelemetryLog" (
+    "id" TEXT NOT NULL,
+    "stationId" TEXT NOT NULL,
+    "month" TEXT NOT NULL,
+    "bod" DOUBLE PRECISION NOT NULL,
+    "cod" DOUBLE PRECISION NOT NULL,
+    "do" DOUBLE PRECISION NOT NULL,
+    "ph" DOUBLE PRECISION NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "WaterTelemetryLog_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
@@ -207,7 +271,10 @@ CREATE UNIQUE INDEX "Company_nib_key" ON "Company"("nib");
 CREATE UNIQUE INDEX "CitizenReport_trackingId_key" ON "CitizenReport"("trackingId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "CitizenReport_inspectionId_key" ON "CitizenReport"("inspectionId");
+CREATE UNIQUE INDEX "AqiCache_clusterId_key" ON "AqiCache"("clusterId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WaterStation_deviceId_key" ON "WaterStation"("deviceId");
 
 -- AddForeignKey
 ALTER TABLE "Company" ADD CONSTRAINT "Company_picId_fkey" FOREIGN KEY ("picId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -225,4 +292,4 @@ ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_companyId_fkey" FOREIGN KEY ("comp
 ALTER TABLE "Inspection" ADD CONSTRAINT "Inspection_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "CitizenReport" ADD CONSTRAINT "CitizenReport_inspectionId_fkey" FOREIGN KEY ("inspectionId") REFERENCES "Inspection"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "WaterTelemetryLog" ADD CONSTRAINT "WaterTelemetryLog_stationId_fkey" FOREIGN KEY ("stationId") REFERENCES "WaterStation"("id") ON DELETE CASCADE ON UPDATE CASCADE;

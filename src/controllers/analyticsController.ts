@@ -1,3 +1,4 @@
+// src/controllers/analyticsController.ts
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { IqairService } from '../services/iqairService';
@@ -283,5 +284,105 @@ export async function getPerformanceAnalytics(req: Request, res: Response) {
     } catch (error) {
         console.error('Get performance analytics error:', error);
         return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+}
+
+// ============================================================================
+// [NEW CONTROLLER] PENGELOLA DATA KUALITAS AIR SUNGAI (ADAPTER TELEMETRI AIR)
+// ============================================================================
+
+/**
+ * Mengambil seluruh data stasiun kualitas air beserta log pengujian terbarunya.
+ * Dilengkapi dengan adaptor format untuk mentransformasikan data PostgreSQL String koordinat
+ * menjadi floating number desimal yang siap dibaca Leaflet.
+ */
+export async function getWaterStations(req: Request, res: Response) {
+    try {
+        // Ambil stasiun air lengkap dengan seluruh log telemetrinya secara berurutan
+        const stations = await prisma.waterStation.findMany({
+            include: {
+                telemetryLogs: {
+                    orderBy: { createdAt: 'asc' }
+                }
+            }
+        });
+
+        // Melakukan adaptasi format data (Adapter Pattern)
+        const mappedStations = stations.map(station => {
+            const logs = station.telemetryLogs.map(log => ({
+                month: log.month,
+                bod: log.bod,
+                cod: log.cod,
+                do: log.do,
+                ph: log.ph
+            }));
+
+            // Ambil log bulan terakhir/terbaru sebagai data saat ini (currentData)
+            const currentData = logs[logs.length - 1] || { month: "Mei", bod: 0, cod: 0, do: 0, ph: 7.0 };
+
+            return {
+                id: station.id,
+                name: station.name,
+                lat: parseFloat(station.lat),
+                lng: parseFloat(station.lng),
+                sourceType: station.sourceType,
+                status: station.status,
+                currentData,
+                monthlyHistory: logs
+            };
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: mappedStations
+        });
+
+    } catch (error: any) {
+        console.error('Get water stations error:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Internal server error'
+        });
+    }
+}
+
+/**
+ * Mengambil data historis log uji laboratorium air untuk satu stasiun air spesifik.
+ */
+export async function getWaterStationLogs(req: Request, res: Response) {
+    try {
+        const { id } = req.params;
+
+        const logs = await prisma.waterTelemetryLog.findMany({
+            where: { stationId: id },
+            orderBy: { createdAt: 'asc' }
+        });
+
+        if (logs.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Data log historis untuk stasiun air tersebut tidak ditemukan.'
+            });
+        }
+
+        const mappedLogs = logs.map(log => ({
+            month: log.month,
+            bod: log.bod,
+            cod: log.cod,
+            do: log.do,
+            ph: log.ph
+        }));
+
+        return res.status(200).json({
+            success: true,
+            data: mappedLogs
+        });
+
+    } catch (error: any) {
+        console.error('Get water station logs error:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Internal server error'
+        });
     }
 }
