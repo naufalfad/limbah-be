@@ -131,10 +131,11 @@ async function main() {
       address: 'Lokasi Belum Teridentifikasi (Kabupaten Bogor)',
       docType: DocType.SPPL,
       status: CompanyStatus.APPROVED,
+      companyPhotoUrl: null, // Skenario tak terpetakan tidak memiliki visualisasi foto bawaan
     },
   });
 
-  // 3. Iterasi Injeksi Database via Modul Eksternal
+  // 3. Iterasi Injeksi Database via Modul Eksternal (Menyertakan companyPhotoUrl baru)
   for (const comp of companiesMasterData) {
     await prisma.company.create({
       data: comp,

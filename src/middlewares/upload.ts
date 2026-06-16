@@ -75,6 +75,7 @@ export const companyDocUpload = multer({
   { name: 'npwpDoc', maxCount: 1 },
   { name: 'siteplanDoc', maxCount: 1 },
   { name: 'docTemplate', maxCount: 1 },
+  { name: 'companyPhoto', maxCount: 1 }, // Injeksi konfigurasi penanganan unggah gambar profil industri
 ]);
 
 // --- EXPORT MIDDLEWARE 2: MULTI-PHOTOS PENGADUAN WARGA (INJEKSI BARU) ---

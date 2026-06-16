@@ -1,3 +1,4 @@
+// src/controllers/companyController.ts
 import { Request, Response } from 'express';
 import { PrismaClient, CompanyStatus, DocType, UserRole, NotificationType, InvoiceType, InvoiceStatus } from '@prisma/client';
 import { z } from 'zod';
@@ -66,6 +67,9 @@ export async function createCompany(req: Request, res: Response) {
     const docTemplateUrl = files?.['docTemplate']?.[0]
       ? `/uploads/companies/${files['docTemplate'][0].filename}`
       : null;
+    const companyPhotoUrl = files?.['companyPhoto']?.[0]
+      ? `/uploads/companies/${files['companyPhoto'][0].filename}`
+      : null;
 
     let parsedTemplateData: any = null;
     if (docType === DocType.UKL_UPL && files?.['docTemplate']?.[0]) {
@@ -87,6 +91,7 @@ export async function createCompany(req: Request, res: Response) {
         ...(docNpwpUrl && { docNpwpUrl }),
         ...(docSiteplanUrl && { docSiteplanUrl }),
         ...(docTemplateUrl && { docTemplateUrl }),
+        ...(companyPhotoUrl && { companyPhotoUrl }), // Menyimpan lokasi path foto industri ke database
         ...(parsedTemplateData && { parsedTemplateData }),
       },
     });
@@ -208,7 +213,7 @@ export async function updateCompanyStatus(req: Request, res: Response) {
 
     const updatedCompany = await prisma.company.update({
       where: { id },
-      data: { 
+      data: {
         status,
         ...(certificateActiveUntil && { certificateActiveUntil })
       },
@@ -219,7 +224,7 @@ export async function updateCompanyStatus(req: Request, res: Response) {
       const isUklUpl = updatedCompany.docType === DocType.UKL_UPL;
       const invoiceAmount = isUklUpl ? 1500000 : 750000;
       const invoiceType = isUklUpl ? InvoiceType.Retribusi_UKL_UPL : InvoiceType.Retribusi_SPPL;
-      
+
       const existingInvoice = await prisma.invoice.findFirst({
         where: {
           companyId: id,
@@ -311,7 +316,7 @@ export async function downloadCertificatePdf(req: Request, res: Response) {
     doc.moveDown(0.5);
     doc.fontSize(10).font('Helvetica').text('Sertifikat Registrasi Lingkungan Digital', { align: 'center', characterSpacing: 2 });
     doc.moveDown(1);
-    
+
     doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
     doc.moveDown(2);
 
@@ -335,7 +340,7 @@ export async function downloadCertificatePdf(req: Request, res: Response) {
     drawRow('Nomor Induk Berusaha', company.nib);
     drawRow('Alamat Usaha', company.address);
     drawRow('Dokumen Lingkungan', `${company.docType} (Rekomendasi Penapisan)`);
-    
+
     doc.moveDown(2);
     doc.font('Helvetica').text('Telah terdaftar dalam sistem pengawasan lingkungan PANTAU LIMBAH dengan kewajiban melakukan pelaporan logbook limbah berkala, mematuhi parameter kepatuhan TPS B3, dan bersedia dilakukan inspeksi berkala.', { align: 'justify' });
 
@@ -470,6 +475,9 @@ export async function updateCompany(req: Request, res: Response) {
     const docTemplateUrl = files?.['docTemplate']?.[0]
       ? `/uploads/companies/${files['docTemplate'][0].filename}`
       : company.docTemplateUrl; // keep old file if no new upload
+    const companyPhotoUrl = files?.['companyPhoto']?.[0]
+      ? `/uploads/companies/${files['companyPhoto'][0].filename}`
+      : company.companyPhotoUrl; // keep old photo if no new upload
 
     let parsedTemplateData: any = company.parsedTemplateData;
     if (docType === DocType.UKL_UPL) {
@@ -495,6 +503,7 @@ export async function updateCompany(req: Request, res: Response) {
         docNpwpUrl,
         docSiteplanUrl,
         docTemplateUrl,
+        companyPhotoUrl, // Melakukan update path foto profil industri
         parsedTemplateData,
       },
     });
@@ -640,16 +649,16 @@ export async function createManualAmdalCompany(req: Request, res: Response) {
         docType: DocType.AMDAL,
         status: (data.status as CompanyStatus) || CompanyStatus.APPROVED,
         certificateActiveUntil,
-        
+
         docAndalUrl,
         docRklUrl,
         docRplUrl,
         docSkKelayakanUrl,
         docPersetujuanUrl,
-        
+
         parsedRklData: parsedRklData ? (parsedRklData as any) : null,
         parsedRplData: parsedRplData ? (parsedRplData as any) : null,
-        
+
         // Manual AMDAL fallbacks for required fields
         picName: 'Admin DLH Manual',
         picPhone: '-',
@@ -807,5 +816,3 @@ export async function getCompanyPreview(req: Request, res: Response) {
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }
-
-

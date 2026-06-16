@@ -141,6 +141,7 @@ model Company {
   docNpwpUrl       String?       // Path/URL file scan NPWP
   docSiteplanUrl   String?       // Path/URL file Siteplan Layout (opsional)
   docTemplateUrl   String?       // Path/URL file completed matrix template (UKL-UPL / SPPL)
+  companyPhotoUrl  String?       // Path/URL file foto profil fisik industri dari server (Inovasi Baru)
   parsedTemplateData Json?       // Menyimpan hasil parse Excel terstruktur
   certificateActiveUntil String? // Masa berlaku izin (YYYY-MM-DD)
   

@@ -20,7 +20,7 @@ export const companiesMasterData = [
         powerSource: 'Captive Power Plant 120 MW',
         kbli: '23941',
         investment: 850000000000.0,
-        landArea: 250000.0,
+        landArea: 25000.0,
         employees: 1200,
         lat: '-6.4862',
         lng: '106.8833',
@@ -29,6 +29,7 @@ export const companiesMasterData = [
         status: CompanyStatus.APPROVED,
         score: 85.0,
         picId: 'USER-005',
+        companyPhotoUrl: '/uploads/companies/factory-cement.jpg'
     },
     {
         id: 'COM-002',
@@ -55,6 +56,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 92.0,
+        companyPhotoUrl: '/uploads/companies/factory-textile.jpg'
     },
     {
         id: 'COM-003',
@@ -81,6 +83,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 35.0,
+        companyPhotoUrl: '/uploads/companies/factory-plastics.jpg'
     },
 
     // --- KLASTER KLAPANUNGGAL (Semen & Bahan Bangunan) ---
@@ -110,6 +113,7 @@ export const companiesMasterData = [
         status: CompanyStatus.APPROVED,
         score: 61.0,
         picId: 'USER-005',
+        companyPhotoUrl: '/uploads/companies/factory-sbi.jpg'
     },
 
     // --- KLASTER GUNUNG PUTRI (Ototomotif, Farmasi & Vaksin) ---
@@ -139,6 +143,7 @@ export const companiesMasterData = [
         status: CompanyStatus.APPROVED,
         score: 68.0,
         picId: 'USER-005',
+        companyPhotoUrl: '/uploads/companies/factory-automotive.jpg'
     },
     {
         id: 'COM-006',
@@ -165,6 +170,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 55.0,
+        companyPhotoUrl: '/uploads/companies/factory-pharma.jpg'
     },
     {
         id: 'COM-007',
@@ -191,6 +197,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 78.0,
+        companyPhotoUrl: '/uploads/companies/factory-pharma.jpg'
     },
     {
         id: 'COM-008',
@@ -217,6 +224,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 81.0,
+        companyPhotoUrl: '/uploads/companies/factory-leather.jpg'
     },
     {
         id: 'COM-009',
@@ -243,6 +251,7 @@ export const companiesMasterData = [
         docType: DocType.SPPL,
         status: CompanyStatus.APPROVED,
         score: 52.0,
+        companyPhotoUrl: '/uploads/companies/factory-chemical.jpg'
     },
 
     // --- KLASTER CILEUNGSI (Kimia, Kertas, Saniter, & Makanan) ---
@@ -271,6 +280,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 71.0,
+        companyPhotoUrl: '/uploads/companies/factory-chemical.jpg'
     },
     {
         id: 'COM-011',
@@ -297,6 +307,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 69.0,
+        companyPhotoUrl: '/uploads/companies/factory-ceramics.jpg'
     },
     {
         id: 'COM-012',
@@ -323,6 +334,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 51.0,
+        companyPhotoUrl: '/uploads/companies/factory-paper.jpg'
     },
     {
         id: 'COM-013',
@@ -349,6 +361,7 @@ export const companiesMasterData = [
         docType: DocType.SPPL,
         status: CompanyStatus.APPROVED,
         score: 87.0,
+        companyPhotoUrl: '/uploads/companies/factory-food.jpg'
     },
     {
         id: 'COM-014',
@@ -375,6 +388,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 93.0,
+        companyPhotoUrl: '/uploads/companies/factory-textile.jpg'
     },
 
     // --- KLASTER CIBINONG (Tekstil, Elektronik, & Farmasi) ---
@@ -403,6 +417,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 82.0,
+        companyPhotoUrl: '/uploads/companies/factory-garments.jpg'
     },
     {
         id: 'COM-016',
@@ -429,6 +444,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 71.0,
+        companyPhotoUrl: '/uploads/companies/factory-machining.jpg'
     },
     {
         id: 'COM-017',
@@ -455,6 +471,7 @@ export const companiesMasterData = [
         docType: DocType.SPPL,
         status: CompanyStatus.APPROVED,
         score: 90.0,
+        companyPhotoUrl: '/uploads/companies/factory-pharma.jpg'
     },
     {
         id: 'COM-018',
@@ -481,6 +498,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 42.0,
+        companyPhotoUrl: '/uploads/companies/factory-chemical.jpg'
     },
 
     // --- KLASTER BABAKAN MADANG & SENTUL (Makanan & Industri Pendukung) ---
@@ -509,6 +527,7 @@ export const companiesMasterData = [
         docType: DocType.SPPL,
         status: CompanyStatus.APPROVED,
         score: 65.0,
+        companyPhotoUrl: '/uploads/companies/factory-food.jpg'
     },
     {
         id: 'COM-020',
@@ -535,6 +554,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 83.0,
+        companyPhotoUrl: '/uploads/companies/factory-maintenance.jpg'
     },
 
     // --- KLASTER CARINGIN & CIAWI (Air Minum & Susu) ---
@@ -563,6 +583,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 84.0,
+        companyPhotoUrl: '/uploads/companies/factory-beverage.jpg'
     },
     {
         id: 'COM-022',
@@ -589,6 +610,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 95.0,
+        companyPhotoUrl: '/uploads/companies/factory-food-large.jpg'
     },
     {
         id: 'COM-023',
@@ -615,6 +637,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 90.0,
+        companyPhotoUrl: '/uploads/companies/factory-food.jpg'
     },
 
     // --- KLASTER CIGOMBONG & PARUNG (Air Minum & Peternakan) ---
@@ -643,6 +666,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 88.0,
+        companyPhotoUrl: '/uploads/companies/factory-water.jpg'
     },
     {
         id: 'COM-025',
@@ -669,5 +693,6 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 79.0,
+        companyPhotoUrl: '/uploads/companies/factory-poultry.jpg'
     }
 ];
