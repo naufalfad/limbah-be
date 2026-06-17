@@ -28,7 +28,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 85.0,
-        picId: 'USER-005',
+        picId: '',
         companyPhotoUrl: '/uploads/companies/factory-cement.jpg'
     },
     {
@@ -85,7 +85,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 61.0,
-        picId: 'USER-005',
+        picId: '',
         companyPhotoUrl: '/uploads/companies/factory-sbi.jpg'
     },
 
@@ -115,7 +115,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 68.0,
-        picId: 'USER-005',
+        picId: '',
         companyPhotoUrl: '/uploads/companies/factory-automotive.jpg'
     },
     {
@@ -226,6 +226,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 51.0,
+        picId: '',
         companyPhotoUrl: '/uploads/companies/factory-paper.jpg'
     },
     {
@@ -421,6 +422,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 95.0,
+        picId: '',
         companyPhotoUrl: '/uploads/companies/factory-food-large.jpg'
     },
 
@@ -450,6 +452,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 88.0,
+        picId: '',
         companyPhotoUrl: '/uploads/companies/factory-water.jpg'
     },
 ];
