@@ -101,4 +101,5 @@ export const amdalDocUpload = multer({
   { name: 'rplDoc', maxCount: 1 },
   { name: 'skKelayakanDoc', maxCount: 1 },
   { name: 'persetujuanDoc', maxCount: 1 },
+  { name: 'companyPhoto', maxCount: 1 },
 ]);
