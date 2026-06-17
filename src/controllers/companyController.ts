@@ -582,6 +582,9 @@ export async function createManualAmdalCompany(req: Request, res: Response) {
     const docPersetujuanUrl = files?.['persetujuanDoc']?.[0]
       ? `/uploads/companies/${files['persetujuanDoc'][0].filename}`
       : null;
+    const companyPhotoUrl = files?.['companyPhoto']?.[0]
+      ? `/uploads/companies/${files['companyPhoto'][0].filename}`
+      : null;
 
     // Strict File Validation
     if (!files || !files['andalDoc']?.[0] || !files['rklDoc']?.[0] || !files['rplDoc']?.[0]) {
@@ -655,6 +658,7 @@ export async function createManualAmdalCompany(req: Request, res: Response) {
         docRplUrl,
         docSkKelayakanUrl,
         docPersetujuanUrl,
+        companyPhotoUrl,
 
         parsedRklData: parsedRklData ? (parsedRklData as any) : null,
         parsedRplData: parsedRplData ? (parsedRplData as any) : null,
