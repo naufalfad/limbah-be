@@ -30,13 +30,16 @@ interface CacheEntry {
     expiresAt: number;
 }
 
-export interface BogorClusterTelemetry {
+export interface KwtClusterTelemetry {
     id: string;
     name: string;
     lat: number;
     lng: number;
     telemetry: ParsedAqiData;
 }
+
+// PROTECTED VARIATION ALIAS: Menghindari error tipe data di modul front-end/store lama [3]
+export type BogorClusterTelemetry = KwtClusterTelemetry;
 
 export class IqairService {
     // In-Memory Cache Map untuk efisiensi pemanggilan API luar
@@ -49,17 +52,17 @@ export class IqairService {
     private static isWorkerRunning = false;
 
     /**
-     * DEFINISI 7 KLASTER INDUSTRI UTAMA KABUPATEN BOGOR (Information Expert)
-     * Koordinat disinkronkan langsung dengan pusat klaster seeder database.
+     * DEFINISI 7 KLASTER INDUSTRI UTAMA KABUPATEN KOTAWARINGIN TIMUR (Information Expert)
+     * Koordinat disinkronkan langsung dengan pusat klaster seeder database [3].
      */
-    public static readonly BOGOR_CLUSTERS = [
-        { id: 'cluster-citeureup', name: 'Citeureup (Klaster Semen & Ban)', lat: -6.4862, lng: 106.8833 },
-        { id: 'cluster-klapanunggal', name: 'Klapanunggal (Klaster Bahan Bangunan)', lat: -6.4520, lng: 106.9210 },
-        { id: 'cluster-gunungputri', name: 'Gunung Putri (Klaster Farmasi & Kimia)', lat: -6.4020, lng: 106.9180 },
-        { id: 'cluster-cileungsi', name: 'Cileungsi (Klaster Kertas & Saniter)', lat: -6.3919, lng: 106.9558 },
-        { id: 'cluster-cibinong', name: 'Cibinong (Klaster Tekstil & Elektronik)', lat: -6.4816, lng: 106.8560 },
-        { id: 'cluster-sentul', name: 'Babakan Madang (Klaster Sentul & Makanan)', lat: -6.5096, lng: 106.8552 },
-        { id: 'cluster-caringin', name: 'Caringin (Klaster Air Minum & Susu)', lat: -6.6936, lng: 106.8352 }
+    public static readonly KWT_CLUSTERS = [
+        { id: 'cluster-citeureup', name: 'Baamang (Klaster Plywood & Kayu Lapis)', lat: -2.5120, lng: 112.9310 },
+        { id: 'cluster-klapanunggal', name: 'Cempaga (Klaster Pabrik Kelapa Sawit)', lat: -2.3450, lng: 112.9120 },
+        { id: 'cluster-gunungputri', name: 'Seranau (Klaster Galangan Kapal & Maritim)', lat: -2.5450, lng: 112.9680 },
+        { id: 'cluster-cileungsi', name: 'Bagendang (Klaster Refinery & Pelabuhan)', lat: -2.6950, lng: 112.9850 },
+        { id: 'cluster-cibinong', name: 'Kota Besi (Klaster Perkebunan Hulu)', lat: -2.4280, lng: 112.9050 },
+        { id: 'cluster-sentul', name: 'MB Ketapang (Klaster Pemukiman & Sentra Kota)', lat: -2.5350, lng: 112.9280 },
+        { id: 'cluster-caringin', name: 'Samuda (Klaster Muara & Industri Hilir)', lat: -2.9550, lng: 112.9820 }
     ];
 
     /**
@@ -67,7 +70,7 @@ export class IqairService {
      * Scheduler berjalan berkala di latar belakang untuk memperbarui data database lokal.
      */
     public static initBackgroundWorker(): void {
-        console.log("[SYSTEM] Menginisialisasi Background Worker IQAir Caching...");
+        console.log("[SYSTEM] Menginisialisasi Background Worker IQAir Caching (Kotim)...");
 
         // Memicu tarikan pertama secara asinkron saat booting server (Immediate Seeding)
         this.updateAllClustersCache().catch((err) => {
@@ -84,7 +87,7 @@ export class IqairService {
 
     /**
      * LOOPER PENCICILAN DATA (THROTTLING ENGINE - 15 DETIK)
-     * Mengiterasi 7 klaster Kabupaten Bogor dengan jeda waktu 15 detik untuk mematuhi rate-limit API
+     * Mengiterasi 7 klaster Kabupaten Kotim dengan jeda waktu 15 detik untuk mematuhi rate-limit API
      */
     private static async updateAllClustersCache(): Promise<void> {
         if (this.isWorkerRunning) {
@@ -93,10 +96,10 @@ export class IqairService {
         }
 
         this.isWorkerRunning = true;
-        console.log("[IQAIR SERVICE] Memulai tarikan berkala kualitas udara 7 klaster...");
+        console.log("[IQAIR SERVICE] Memulai tarikan berkala kualitas udara 7 klaster Kotim...");
 
-        for (let i = 0; i < this.BOGOR_CLUSTERS.length; i++) {
-            const cluster = this.BOGOR_CLUSTERS[i];
+        for (let i = 0; i < this.KWT_CLUSTERS.length; i++) {
+            const cluster = this.KWT_CLUSTERS[i];
             try {
                 console.log(`[IQAIR SERVICE] Mengambil data untuk klaster: ${cluster.name} (${i + 1}/7)...`);
 
@@ -130,7 +133,7 @@ export class IqairService {
             }
 
             // Throttling: Berikan jeda waktu tunggu asinkron 15 detik sebelum memproses klaster berikutnya
-            if (i < this.BOGOR_CLUSTERS.length - 1) {
+            if (i < this.KWT_CLUSTERS.length - 1) {
                 console.log("[IQAIR SERVICE] Menunggu 15 detik sebelum request klaster berikutnya...");
                 await this.delay(15000);
             }
@@ -148,7 +151,7 @@ export class IqairService {
         const isMockKey = !apiKey || apiKey === 'your_iqair_api_key_here' || apiKey.trim() === '';
 
         if (isMockKey) {
-            return this.generateSimulationData(lat, lng, 'Bogor (Simulasi Spasial)');
+            return this.generateSimulationData(lat, lng, 'Sampit (Simulasi Spasial)');
         }
 
         try {
@@ -157,19 +160,19 @@ export class IqairService {
 
             if (!response.ok) {
                 console.warn(`[IQAIR SERVICE] API mengembalikan status ${response.status}. Mengaktifkan fallback simulasi.`);
-                return this.generateSimulationData(lat, lng, 'Bogor (Fallback)');
+                return this.generateSimulationData(lat, lng, 'Sampit (Fallback)');
             }
 
             const rawJson = await response.json();
 
             if (rawJson.status !== 'success') {
-                return this.generateSimulationData(lat, lng, 'Bogor (Fallback)');
+                return this.generateSimulationData(lat, lng, 'Sampit (Fallback)');
             }
 
             const iqData = rawJson.data;
             return {
-                city: iqData.city || 'Cibinong',
-                state: iqData.state || 'Jawa Barat',
+                city: iqData.city || 'Sampit',
+                state: iqData.state || 'Kalimantan Tengah',
                 country: iqData.country || 'Indonesia',
                 aqi: iqData.current.pollution.aqius ?? 0,
                 mainPollutant: this.mapPollutantCode(iqData.current.pollution.mainus),
@@ -184,7 +187,7 @@ export class IqairService {
             };
         } catch (error) {
             console.error('[IQAIR SERVICE] Panggilan jaringan gagal. Mengaktifkan fallback simulasi.', error);
-            return this.generateSimulationData(lat, lng, 'Bogor (Offline Fallback)');
+            return this.generateSimulationData(lat, lng, 'Sampit (Offline Fallback)');
         }
     }
 
@@ -236,7 +239,7 @@ export class IqairService {
                 const weatherObj = closestCluster.weather as any;
                 const parsedData: ParsedAqiData = {
                     city: closestCluster.name,
-                    state: 'Jawa Barat',
+                    state: 'Kalimantan Tengah',
                     country: 'Indonesia',
                     aqi: closestCluster.aqi,
                     mainPollutant: closestCluster.aqi > 100 ? 'PM2.5 (Debu Halus)' : 'O3 (Ozon Permukaan)',
@@ -276,7 +279,7 @@ export class IqairService {
      * MENGAMBIL DATA BATCH TELEMETRI KLASTER (REFAKTORISASI TOTAL - DATABASE ONLY)
      * Mengakses database lokal dengan performa O(1) tanpa memicu request eksternal ke IQAir.
      */
-    public static async getBatchTelemetry(): Promise<BogorClusterTelemetry[]> {
+    public static async getBatchTelemetry(): Promise<KwtClusterTelemetry[]> {
         try {
             // Ambil seluruh data klaster yang di-cache di PostgreSQL lokal
             const cachedClusters = await prisma.aqiCache.findMany({
@@ -286,10 +289,10 @@ export class IqairService {
             // SELF-SEEDING / LAZY INITIALIZATION
             // Jika database kosong, lakukan seeding asinkron darurat agar GIS Map tidak kosong
             if (cachedClusters.length === 0) {
-                console.log("[IQAIR SERVICE] Database AqiCache kosong. Memulai seeding darurat...");
-                const seededResults: BogorClusterTelemetry[] = [];
+                console.log("[IQAIR SERVICE] Database AqiCache kosong. Memulai seeding darurat KWT...");
+                const seededResults: KwtClusterTelemetry[] = [];
 
-                for (const cluster of this.BOGOR_CLUSTERS) {
+                for (const cluster of this.KWT_CLUSTERS) {
                     const simulated = this.generateSimulationData(cluster.lat, cluster.lng, cluster.name);
 
                     // Trigger penulisan DB tanpa memblokir
@@ -316,7 +319,7 @@ export class IqairService {
                 return seededResults;
             }
 
-            // Memetakan struktur database ke tipe kontraktual BogorClusterTelemetry
+            // Memetakan struktur database ke tipe kontraktual KwtClusterTelemetry
             return cachedClusters.map((dbCluster) => {
                 const weatherObj = dbCluster.weather as any;
                 return {
@@ -326,7 +329,7 @@ export class IqairService {
                     lng: parseFloat(dbCluster.lng),
                     telemetry: {
                         city: dbCluster.name,
-                        state: 'Jawa Barat',
+                        state: 'Kalimantan Tengah',
                         country: 'Indonesia',
                         aqi: dbCluster.aqi,
                         mainPollutant: dbCluster.aqi > 100 ? 'PM2.5 (Debu Halus)' : 'O3 (Ozon Permukaan)',
@@ -347,8 +350,8 @@ export class IqairService {
             console.error("[IQAIR SERVICE] Gagal query AqiCache database. Mundur ke simulasi on-the-fly:", err.message);
 
             // Absolute Fallback: kembalikan simulasi instan jika database mengalami kerusakan fatal
-            const fallbackResults: BogorClusterTelemetry[] = [];
-            for (const cluster of this.BOGOR_CLUSTERS) {
+            const fallbackResults: KwtClusterTelemetry[] = [];
+            for (const cluster of this.KWT_CLUSTERS) {
                 const simulated = this.generateSimulationData(cluster.lat, cluster.lng, cluster.name);
                 fallbackResults.push({
                     id: cluster.id,
@@ -371,13 +374,13 @@ export class IqairService {
 
         return {
             city: prefix,
-            state: 'Jawa Barat',
+            state: 'Kalimantan Tengah',
             country: 'Indonesia',
             aqi: baseAqi,
             mainPollutant: baseAqi > 100 ? 'PM2.5 (Debu Halus)' : 'O3 (Ozon Permukaan)',
             weather: {
-                temperature: Math.floor(25 + (seed * 7)),
-                humidity: Math.floor(65 + (seed * 25)),
+                temperature: Math.floor(26 + (seed * 5)), // Suhu tropis ekuator
+                humidity: Math.floor(70 + (seed * 20)),
                 windSpeed: parseFloat((1.0 + (seed * 5)).toFixed(1)),
                 windDirection: Math.floor(seed * 360),
                 pressure: Math.floor(1008 + (seed * 4))

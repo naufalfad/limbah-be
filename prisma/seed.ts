@@ -1,3 +1,4 @@
+// prisma/seed.ts
 import { PrismaClient } from '@prisma/client';
 import { seedUsers } from './seeders/users.seeder';
 import { seedCompanies } from './seeders/companies.seeder';
@@ -15,6 +16,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   console.log('Clearing database...');
+  // Membersihkan tabel anak (dependent tables) terlebih dahulu guna menghindari pelanggaran Foreign Key [3]
   await prisma.waterTelemetryLog.deleteMany();
   await prisma.waterStationBaseline.deleteMany();
   await prisma.waterStation.deleteMany();
@@ -29,10 +31,11 @@ async function main() {
   await prisma.auditLog.deleteMany();
   await prisma.user.deleteMany();
 
-  console.log('Starting modular database seeding...');
-  
+  console.log('Starting modular database seeding (Kotawaringin Timur Edition)...');
+
+  // Menjalankan seeder secara berurutan sesuai diagram dependensi [3]
   await seedUsers(prisma);
-  await seedCompanies(prisma);
+  await seedCompanies(prisma); // Menggunakan data industri KWT baru
   await seedCitizenReports(prisma);
   await seedInspections(prisma);
   await seedWasteLogs(prisma);
@@ -40,15 +43,15 @@ async function main() {
   await seedInvoices(prisma);
   await seedNotifications(prisma);
   await seedAuditLogs(prisma);
-  await seedAqiCaches(prisma);
-  await seedWaterStations(prisma);
+  await seedAqiCaches(prisma); // Seeder AQI Sampit
+  await seedWaterStations(prisma); // Seeder stasiun air Sungai Mentaya
 
-  console.log('Database seeding completed successfully!');
+  console.log('Database seeding completed successfully for KWT!');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('CRITICAL SEEDING ERROR:', e);
     process.exit(1);
   })
   .finally(async () => {

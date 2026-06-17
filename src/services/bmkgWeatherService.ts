@@ -35,7 +35,8 @@ export class BmkgWeatherService {
      */
     public static async getWeatherBySubdistrict(subdistrictCode: string): Promise<BmkgWeatherForecast> {
         if (!subdistrictCode) {
-            return this.generateSimulatedWeather(subdistrictCode, "Cibinong", "Cibinong");
+            // PROTECTED VARIATION FALLBACK: Diarahkan ke pusat administrasi Ketapang, MB Ketapang, Sampit [3]
+            return this.generateSimulatedWeather(subdistrictCode, "Ketapang", "Mentawa Baru Ketapang");
         }
 
         const now = Date.now();
@@ -48,7 +49,7 @@ export class BmkgWeatherService {
 
         try {
             const url = `${this.API_URL}?adm4=${subdistrictCode}`;
-            console.log(`[BMKG SERVICE] Mengambil cuaca luar untuk ADM4: ${subdistrictCode}...`);
+            console.log(`[BMKG SERVICE] Mengambil cuaca luar untuk ADM4 KWT: ${subdistrictCode}...`);
 
             const response = await fetch(url, {
                 method: "GET",
@@ -84,9 +85,9 @@ export class BmkgWeatherService {
             }
 
             const location = rawJson.lokasi || {};
-            const subdistrictName = location.desa || "Kabupaten Bogor";
-            const districtName = location.kecamatan || "Bogor";
-            const cityName = location.kotkab || "Bogor";
+            const subdistrictName = location.desa || "Sampit";
+            const districtName = location.kecamatan || "Mentawa Baru Ketapang";
+            const cityName = location.kotkab || "Kabupaten Kotawaringin Timur";
 
             // 3. PARSING DATA & STANDARDIKASI SATUAN (Type Safety)
             const result: BmkgWeatherForecast = {
@@ -121,16 +122,17 @@ export class BmkgWeatherService {
 
     /**
      * Penghasil data cuaca tiruan geografis realistis (Deterministic Fallback)
+     * Ditargetkan khusus untuk wilayah administratif di Kabupaten Kotawaringin Timur [3]
      */
     private static generateSimulatedWeather(
         subdistrictCode: string,
-        subName = "Klapanunggal",
-        distName = "Klapanunggal"
+        subName = "Baamang Barat",
+        distName = "Baamang"
     ): BmkgWeatherForecast {
         const hash = subdistrictCode ? subdistrictCode.split('.').reduce((acc, val) => acc + parseInt(val || "0", 10), 0) : 12;
         const seed = Math.abs(Math.sin(hash));
 
-        // Menciptakan variasi cuaca logis (Cerah Berawan s/d Hujan Ringan)
+        // Menciptakan variasi cuaca logis tropis basah (Cerah Berawan s/d Hujan Ringan)
         const weatherOptions = ["Cerah Berawan", "Cerah Berawan", "Berawan", "Hujan Ringan", "Cerah"];
         const weatherIdx = Math.floor(seed * weatherOptions.length);
         const weatherDesc = weatherOptions[weatherIdx];
@@ -141,12 +143,12 @@ export class BmkgWeatherService {
             subdistrictCode,
             subdistrictName: subName,
             districtName: distName,
-            cityName: "Kabupaten Bogor",
-            temperature: isRainy ? parseFloat((24 + seed * 2).toFixed(1)) : parseFloat((28 + seed * 4).toFixed(1)),
-            humidity: isRainy ? parseFloat((85 + seed * 10).toFixed(0)) : parseFloat((65 + seed * 15).toFixed(0)),
-            windSpeed: parseFloat((5 + seed * 12).toFixed(1)),
-            windDirection: seed > 0.5 ? "Timur Laut" : "Barat Daya",
-            cloudCover: isRainy ? 80 : 35,
+            cityName: "Kabupaten Kotawaringin Timur",
+            temperature: isRainy ? parseFloat((25 + seed * 2).toFixed(1)) : parseFloat((29 + seed * 4).toFixed(1)),
+            humidity: isRainy ? parseFloat((85 + seed * 10).toFixed(0)) : parseFloat((70 + seed * 15).toFixed(0)),
+            windSpeed: parseFloat((4 + seed * 10).toFixed(1)),
+            windDirection: seed > 0.5 ? "Barat Daya" : "Timur Laut",
+            cloudCover: isRainy ? 75 : 30,
             weatherDesc,
             localTime: new Date().toISOString().replace("T", " ").substring(0, 19),
             isSimulated: true

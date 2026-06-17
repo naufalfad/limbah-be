@@ -30,18 +30,43 @@ export interface CalculatedWaterTelemetry {
  * MAPPER HUBUNGAN SPASIAL PABRIK HULU - SENSOR HILIR (INFORMATION EXPERT)
  * ============================================================================
  * Menyimpan pemetaan konstan letak pabrik hulu (Upstream) untuk setiap stasiun sensor.
- * Mengingat sungai mengalir dari Selatan (hulu pegunungan) ke Utara (hilir dataran rendah),
- * jika pabrik di hulu membuang limbah, sensor di hilir akan mendeteksi beban pencemarannya [3].
+ * Karena Sungai Mentaya mengalir dari Utara (Hulu: Cempaga) ke Selatan (Hilir: Samuda),
+ * seluruh buangan limbah cair industri di bagian hulu akan terakumulasi dan memperberat
+ * beban pencemaran organik (BOD/COD) yang terbaca pada sensor di hilirnya [3].
  */
 const UPSTREAM_COMPANIES_MAP: Record<string, string[]> = {
-    "WS-01": [], // Hulu Ciliwung Cisarua (Sangat bersih, tidak ada industri berat di hulu)
-    "WS-02": [], // Tengah Ciliwung Katulampa (Daerah hulu didominasi pariwisata/domestik)
-    "WS-04": ["COM-001", "COM-002", "COM-003"], // Aliran Citeureup (Downstream dari semen & plastik film)
+    // 1. Stasiun Hulu Cempaga: Tidak memiliki industri hulu berskala besar
+    "WS-01": [],
+
+    // 2. Stasiun Tengah Baamang: Terbawa dampak limpasan dari Cempaga & Kota Besi
+    "WS-02": [
+        "COM-001", // PT. Mentaya Sawit Mas (PKS Cempaga)
+        "COM-024"  // PT. Aqua Mentaya (Kota Besi)
+    ],
+
+    // 3. Stasiun Hilir Pelabuhan Bagendang: Terbawa beban kumulatif perkotaan dan hulu
     "WS-03": [
-        "COM-001", "COM-002", "COM-003", // Industri hulu di Citeureup [3]
-        "COM-004",                       // Industri hulu di Klapanunggal
-        "COM-010", "COM-011", "COM-012", "COM-013", "COM-014" // Industri hulu di Cileungsi
-    ] // Hilir Cileungsi Klapanunggal (Menerima beban pencemaran kumulatif terdahsyat) [3]
+        "COM-001", // PKS Cempaga
+        "COM-024", // Air Minum Kota Besi
+        "COM-003", // PT. Rimba Makmur Utama (Baamang)
+        "COM-007", // PT. Mentaya Kahayan Plywood (Baamang)
+        "COM-013", // PT. Tirta Mentaya Sejahtera (Baamang)
+        "COM-009", // PT. Sampit Agro Industri (MB Ketapang)
+        "COM-018", // PT. Mentaya Agro Kimia (MB Ketapang)
+        "COM-019"  // PT. Sampit Meat Processing (MB Ketapang)
+    ],
+
+    // 4. Stasiun Muara Samuda: Menerima akumulasi total seluruh industri hulu & hilir
+    "WS-04": [
+        "COM-001", "COM-024", "COM-003", "COM-007", "COM-013", "COM-009", "COM-018", "COM-019",
+        "COM-004", // PT. Mentaya Maritim Shipyard (Seranau)
+        "COM-017", // PT. Sampit Plywood Industry (Seranau)
+        "COM-005", // PT. Sampit CPO Refinery (Bagendang)
+        "COM-010", // PT. Mentaya Palm Oil Refinery (Bagendang)
+        "COM-012", // PT. Pelindo Regional III Bagendang
+        "COM-014", // PT. Sumber Kahayan Sinergi (Bagendang)
+        "COM-022"  // PT. Sampit Palm Plantation (Bagendang)
+    ]
 };
 
 // Koefisien pembobotan beban pencemaran organik (BOD/COD) per liter limbah cair industri hulu
@@ -95,7 +120,7 @@ export class PredictiveHydrologicalEngine {
                     bod: 2.5,
                     cod: 18.0,
                     do: 5.5,
-                    ph: 7.0,
+                    ph: 6.8,
                     avgTemperature: 28.0,
                     avgRainfallMm: 150.0,
                     createdAt: new Date(),
@@ -237,16 +262,16 @@ export class PredictiveHydrologicalEngine {
             bod: 2.5,
             cod: 18.0,
             do: 5.5,
-            ph: 7.0,
+            ph: 6.8,
             avgTemperature: 28.0,
             avgRainfallMm: 150.0
         };
 
         return {
             stationId,
-            stationName: station?.name || "Stasiun Air Bogor",
-            lat: parseFloat(station?.lat || "-6.4816"),
-            lng: parseFloat(station?.lng || "106.8560"),
+            stationName: station?.name || "Stasiun Air Sungai Mentaya",
+            lat: parseFloat(station?.lat || "-2.5337"), // Koordinat pusat Sampit
+            lng: parseFloat(station?.lng || "112.9515"),
             bod: fallbackData.bod,
             cod: fallbackData.cod,
             do: fallbackData.do,
