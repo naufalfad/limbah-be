@@ -8,6 +8,8 @@ import {
   StationStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import * as fs from 'fs';
+import * as path from 'path';
 import { companiesMasterData } from './data/companiesMaster';
 
 const prisma = new PrismaClient();
@@ -24,6 +26,7 @@ async function main() {
   // 5. Company dihapus sebelum User (PIC) dibersihkan.
   // =================================================================================
   await prisma.waterTelemetryLog.deleteMany();
+  await prisma.waterStationBaseline.deleteMany(); // Bersihkan data baseline terlebih dahulu
   await prisma.waterStation.deleteMany();
   await prisma.citizenReport.deleteMany();
   await prisma.inspection.deleteMany();
@@ -32,6 +35,7 @@ async function main() {
   await prisma.wasteLog.deleteMany();
   await prisma.company.deleteMany();
   await prisma.systemNotification.deleteMany();
+  await prisma.aqiCache.deleteMany(); // SINKRONISASI CACHE UDARA
   await prisma.auditLog.deleteMany();
   await prisma.user.deleteMany();
 
@@ -143,94 +147,65 @@ async function main() {
   }
 
   // =================================================================================
-  // [NEW SEEDER INTEGRATION] SEED STASIUN PEMANTAU AIR & LOG BULANAN (PP 22/2021)
+  // [NEW SEEDER INTEGRATION] PEMBACAAN DAN SINKRONISASI DATA RIIL JSON (BOD/COD/DO/pH) [3]
   // =================================================================================
-  console.log('Seeding Water Quality Monitoring Stations (Kab. Bogor)...');
+  console.log('Reading and validating real-world hydrological baselines from JSON...');
 
-  const stationsData = [
-    { id: "WS-01", name: "Stasiun Hulu Ciliwung (Cisarua)", lat: "-6.6986", lng: "106.9430" },
-    { id: "WS-02", name: "Stasiun Tengah Ciliwung (Katulampa)", lat: "-6.6163", lng: "106.8325" },
-    { id: "WS-03", name: "Stasiun Hilir Cileungsi (Klapanunggal)", lat: "-6.3986", lng: "106.9680" },
-    { id: "WS-04", name: "Stasiun Aliran Citeureup (Mayor Oking)", lat: "-6.4786", lng: "106.8530" }
-  ];
+  const normalsFilePath = path.join(__dirname, 'data', 'bogor-river-normals.json');
+  if (!fs.existsSync(normalsFilePath)) {
+    throw new Error(`CRITICAL DATABASE INITIALIZATION ERROR: Berkas data dasar spasial perairan "${normalsFilePath}" tidak ditemukan!`);
+  }
 
-  const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const rawJsonData = fs.readFileSync(normalsFilePath, 'utf-8');
+  const stationsData = JSON.parse(rawJsonData);
+
+  console.log(`Seeding ${stationsData.length} calibrated water quality stations and monthly baselines...`);
 
   for (const st of stationsData) {
-    // 1. Buat stasiun pemantau air induk
+    // 1. Buat master data stasiun pemantau air sungai
     await prisma.waterStation.create({
       data: {
         id: st.id,
         name: st.name,
         lat: st.lat,
         lng: st.lng,
-        sourceType: SourceType.SIMULATED,
-        status: StationStatus.ACTIVE
+        subdistrictCode: st.subdistrictCode,
+        sourceType: st.sourceType as SourceType,
+        status: st.status as StationStatus
       }
     });
 
-    // 2. Hasilkan log 12 bulan secara otomatis menggunakan kalkulasi hidrologi musiman
-    for (let mIdx = 0; mIdx < months.length; mIdx++) {
-      const monthName = months[mIdx];
+    // 2. Suntikkan baseline dan log bulanan historis berbasis data laboratorium ilmiah riil
+    for (const mData of st.months) {
+      // A. Masukkan ke tabel penampung data baseline statis iklim & air (Henry's Law & Dilution Standards)
+      await prisma.waterStationBaseline.create({
+        data: {
+          stationId: st.id,
+          month: mData.month,
+          bod: mData.bod,
+          cod: mData.cod,
+          do: mData.do,
+          ph: mData.ph,
+          avgTemperature: mData.avgTemperature,
+          avgRainfallMm: mData.avgRainfallMm
+        }
+      });
 
-      // Bulan kering / Musim Kemarau (Mei - Oktober / mIdx: 4 s/d 9)
-      const isDrySeason = mIdx >= 4 && mIdx <= 9;
-
-      // Variabel pengali noise acak untuk keaslian data (seed-safe)
-      const noise = parseFloat((Math.sin(mIdx) * 0.15).toFixed(2));
-
-      let bod = 0;
-      let cod = 0;
-      let dissolvedOxygen = 0;
-      let ph = 7.0;
-
-      // Model Pemetaan Karakteristik Aliran Sungai dari Hulu ke Hilir
-      if (st.id === "WS-01") {
-        // Hulu Ciliwung (Puncak, Cisarua) — Sangat jernih sepanjang tahun, debit air terjaga
-        bod = isDrySeason ? parseFloat((1.7 + noise).toFixed(1)) : parseFloat((1.3 + noise).toFixed(1));
-        cod = isDrySeason ? parseFloat((12.0 + noise * 10).toFixed(1)) : parseFloat((9.5 + noise * 5).toFixed(1));
-        dissolvedOxygen = isDrySeason ? parseFloat((6.7 + noise).toFixed(1)) : parseFloat((7.1 + noise).toFixed(1));
-        ph = isDrySeason ? parseFloat((7.2 + noise).toFixed(1)) : parseFloat((7.0 + noise).toFixed(1));
-      }
-      else if (st.id === "WS-02") {
-        // Tengah Ciliwung (Katulampa) — Mulai melewati aktivitas pertanian & limpasan domestik ringan
-        bod = isDrySeason ? parseFloat((2.6 + noise).toFixed(1)) : parseFloat((2.0 + noise).toFixed(1));
-        cod = isDrySeason ? parseFloat((20.5 + noise * 10).toFixed(1)) : parseFloat((16.0 + noise * 5).toFixed(1));
-        dissolvedOxygen = isDrySeason ? parseFloat((5.4 + noise).toFixed(1)) : parseFloat((6.2 + noise).toFixed(1));
-        ph = isDrySeason ? parseFloat((6.8 + noise).toFixed(1)) : parseFloat((6.9 + noise).toFixed(1));
-      }
-      else if (st.id === "WS-03") {
-        // Hilir Cileungsi (Klapanunggal) — Kritis! Padat pabrik, kemarau debit drop drastis = polusi pekat
-        bod = isDrySeason ? parseFloat((5.5 + noise).toFixed(1)) : parseFloat((3.3 + noise).toFixed(1)); // Melebihi limit PP (3.0)
-        cod = isDrySeason ? parseFloat((39.0 + noise * 15).toFixed(1)) : parseFloat((26.5 + noise * 8).toFixed(1)); // Melebihi limit PP (25.0)
-        dissolvedOxygen = isDrySeason ? parseFloat((2.7 + noise).toFixed(1)) : parseFloat((4.3 + noise).toFixed(1)); // Oksigen drop drastis di bawah 4.0
-        ph = isDrySeason ? parseFloat((5.4 + noise).toFixed(1)) : parseFloat((6.2 + noise).toFixed(1)); // Sedikit asam di musim kering
-      }
-      else {
-        // Aliran Citeureup (Mayor Oking) — Sedang ke kritis di musim kemarau
-        bod = isDrySeason ? parseFloat((3.9 + noise).toFixed(1)) : parseFloat((2.8 + noise).toFixed(1));
-        cod = isDrySeason ? parseFloat((29.5 + noise * 12).toFixed(1)) : parseFloat((22.0 + noise * 6).toFixed(1));
-        dissolvedOxygen = isDrySeason ? parseFloat((3.6 + noise).toFixed(1)) : parseFloat((4.6 + noise).toFixed(1));
-        ph = isDrySeason ? parseFloat((6.4 + noise).toFixed(1)) : parseFloat((6.6 + noise).toFixed(1));
-      }
-
-      // Pastikan DO tidak bernilai negatif
-      dissolvedOxygen = Math.max(0.1, dissolvedOxygen);
-
+      // B. Masukkan ke tabel logs pelaporan historis agar grafik Recharts terisi rapi secara dinamis
       await prisma.waterTelemetryLog.create({
         data: {
           stationId: st.id,
-          month: monthName,
-          bod,
-          cod,
-          do: dissolvedOxygen,
-          ph
+          month: mData.month,
+          bod: mData.bod,
+          cod: mData.cod,
+          do: mData.do,
+          ph: mData.ph
         }
       });
     }
   }
 
-  console.log('Database seeding completed successfully!');
+  console.log('Database seeding completed successfully with authenticated local baselines!');
 }
 
 main()

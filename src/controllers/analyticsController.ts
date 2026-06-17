@@ -1,12 +1,13 @@
 // src/controllers/analyticsController.ts
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, SourceType } from '@prisma/client';
 import { IqairService } from '../services/iqairService';
+import { PredictiveHydrologicalEngine } from '../services/predictiveEngine';
 
 const prisma = new PrismaClient();
 
 /**
- * [NEW CONTROLLER] Mengambil data telemetri Kualitas Udara (AQI) dan Cuaca Real-time
+ * [PROTECTED] Mengambil data telemetri Kualitas Udara (AQI) dan Cuaca Real-time
  * berdasarkan koordinat spasial (latitude & longitude) dari Frontend.
  * GRASP: Controller & High Cohesion
  */
@@ -52,7 +53,7 @@ export async function getAqiTelemetry(req: Request, res: Response) {
 }
 
 /**
- * [NEW CONTROLLER FUNCTION] Mengambil seluruh data telemetri kualitas udara batch
+ * [PROTECTED] Mengambil seluruh data telemetri kualitas udara batch
  * dari 7 stasiun klaster Kabupaten Bogor tanpa parameter koordinat eksternal.
  * GRASP: Controller, Indirection, & High Cohesion
  */
@@ -288,17 +289,17 @@ export async function getPerformanceAnalytics(req: Request, res: Response) {
 }
 
 // ============================================================================
-// [NEW CONTROLLER] PENGELOLA DATA KUALITAS AIR SUNGAI (ADAPTER TELEMETRI AIR)
+// [PENGELOLA DATA KUALITAS AIR SUNGAI (ADAPTER TELEMETRI AIR) - UPDATED [3]]
 // ============================================================================
 
 /**
  * Mengambil seluruh data stasiun kualitas air beserta log pengujian terbarunya.
- * Dilengkapi dengan adaptor format untuk mentransformasikan data PostgreSQL String koordinat
- * menjadi floating number desimal yang siap dibaca Leaflet.
+ * Terintegrasi penuh dengan Predictive Hydrological Engine [3].
+ * GRASP: Controller, Indirection, & High Cohesion
  */
 export async function getWaterStations(req: Request, res: Response) {
     try {
-        // Ambil stasiun air lengkap dengan seluruh log telemetrinya secara berurutan
+        // Ambil data stasiun air lengkap dengan relasi log historis dari database [3]
         const stations = await prisma.waterStation.findMany({
             include: {
                 telemetryLogs: {
@@ -307,8 +308,12 @@ export async function getWaterStations(req: Request, res: Response) {
             }
         });
 
-        // Melakukan adaptasi format data (Adapter Pattern)
-        const mappedStations = stations.map(station => {
+        // Iterasi kalkulasi telemetri secara paralel (Adapter Pattern & Indirection) [3]
+        const mappedStations = await Promise.all(stations.map(async (station) => {
+            // 1. Eksekusi perhitungan real-time berbasis anomali BMKG dan beban industri hulu [3]
+            const liveResult = await PredictiveHydrologicalEngine.calculateCurrentWaterQuality(station.id);
+
+            // 2. Map log historis dari database PostgreSQL [3]
             const logs = station.telemetryLogs.map(log => ({
                 month: log.month,
                 bod: log.bod,
@@ -317,20 +322,33 @@ export async function getWaterStations(req: Request, res: Response) {
                 ph: log.ph
             }));
 
-            // Ambil log bulan terakhir/terbaru sebagai data saat ini (currentData)
-            const currentData = logs[logs.length - 1] || { month: "Mei", bod: 0, cod: 0, do: 0, ph: 7.0 };
+            // 3. Gabungkan bulan aktif hasil kalkulasi sebagai payload penutup [3]
+            const currentMonthName = new Date().toLocaleString('id-ID', { month: 'short' });
+            const currentData = {
+                month: currentMonthName,
+                bod: liveResult.bod,
+                cod: liveResult.cod,
+                do: liveResult.do,
+                ph: liveResult.ph,
+                weather: liveResult.weather, // Metadata cuaca mikro BMKG [1]
+                source: liveResult.source
+            };
+
+            // 4. Batasi grafik total history maksimal 12 bulan agar tidak terjadi overflow di frontend [3]
+            const monthlyHistory = [...logs, currentData].slice(-12);
 
             return {
                 id: station.id,
                 name: station.name,
-                lat: parseFloat(station.lat),
+                lat: parseFloat(station.lat), // Ubah tipe string database ke desimal untuk Leaflet [3]
                 lng: parseFloat(station.lng),
-                sourceType: station.sourceType,
+                // Jika data terkorelasi sukses dengan satelit cuaca BMKG, set tipe ke PHYSICAL_IOT
+                sourceType: liveResult.source === 'LIVE_BMKG_CORRELATED' ? SourceType.PHYSICAL_IOT : station.sourceType,
                 status: station.status,
                 currentData,
-                monthlyHistory: logs
+                monthlyHistory
             };
-        });
+        }));
 
         return res.status(200).json({
             success: true,
@@ -338,7 +356,7 @@ export async function getWaterStations(req: Request, res: Response) {
         });
 
     } catch (error: any) {
-        console.error('Get water stations error:', error);
+        console.error('Get water stations controller error:', error);
         return res.status(500).json({
             success: false,
             error: error.message || 'Internal server error'
@@ -348,22 +366,20 @@ export async function getWaterStations(req: Request, res: Response) {
 
 /**
  * Mengambil data historis log uji laboratorium air untuk satu stasiun air spesifik.
+ * Terintegrasi penuh dengan Predictive Hydrological Engine [3].
  */
 export async function getWaterStationLogs(req: Request, res: Response) {
     try {
         const { id } = req.params;
 
+        // Ambil logbook dari DB lokal
         const logs = await prisma.waterTelemetryLog.findMany({
             where: { stationId: id },
             orderBy: { createdAt: 'asc' }
         });
 
-        if (logs.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'Data log historis untuk stasiun air tersebut tidak ditemukan.'
-            });
-        }
+        // 1. Eksekusi perhitungan real-time untuk bulan aktif berjalan [3]
+        const liveResult = await PredictiveHydrologicalEngine.calculateCurrentWaterQuality(id);
 
         const mappedLogs = logs.map(log => ({
             month: log.month,
@@ -373,9 +389,22 @@ export async function getWaterStationLogs(req: Request, res: Response) {
             ph: log.ph
         }));
 
+        // 2. Gabungkan data masa lalu dengan perhitungan aktif hari ini
+        const currentMonthName = new Date().toLocaleString('id-ID', { month: 'short' });
+        const finalLogs = [
+            ...mappedLogs,
+            {
+                month: currentMonthName,
+                bod: liveResult.bod,
+                cod: liveResult.cod,
+                do: liveResult.do,
+                ph: liveResult.ph
+            }
+        ].slice(-12);
+
         return res.status(200).json({
             success: true,
-            data: mappedLogs
+            data: finalLogs
         });
 
     } catch (error: any) {

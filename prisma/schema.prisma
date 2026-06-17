@@ -316,17 +316,19 @@ model AqiCache {
 // [MODEL BARU] STASIUN PEMANTAUAN KUALITAS AIR SUNGAI (WaterStation_PT)
 // ============================================================================
 model WaterStation {
-  id            String             @id // Kita gunakan ID manual (WS-01, WS-02) agar sinkron dengan FE
-  name          String
-  lat           String             // Disamakan bertipe String sesuai koordinat Company
-  lng           String
-  sourceType    SourceType         @default(SIMULATED)
-  status        StationStatus      @default(ACTIVE)
-  deviceId      String?            @unique // Untuk kebutuhan integrasi fisik hardware IoT kelak
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id              String                 @id // Kita gunakan ID manual (WS-01, WS-02) agar sinkron dengan FE
+  name            String
+  lat             String                 // Disamakan bertipe String sesuai koordinat Company
+  lng             String
+  subdistrictCode String?                // Kode ADM4 Kelurahan Kemendagri untuk penargetan API Cuaca BMKG secara mikro [1]
+  sourceType      SourceType             @default(SIMULATED)
+  status          StationStatus          @default(ACTIVE)
+  deviceId        String?                @unique // Untuk kebutuhan integrasi fisik hardware IoT kelak
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
   
-  telemetryLogs WaterTelemetryLog[]
+  telemetryLogs   WaterTelemetryLog[]
+  baselines       WaterStationBaseline[] // Relasi baru ke database profil hidrologi statis riil
 }
 
 model WaterTelemetryLog {
@@ -339,4 +341,25 @@ model WaterTelemetryLog {
   do            Float              // mg/L (Dissolved Oxygen)
   ph            Float              // Derajat Keasaman
   createdAt     DateTime           @default(now())
+}
+
+// ============================================================================
+// [MODEL BARU] DATABASE PROFIL SEASONS DAN KLIMATOLOGI SUNGAI (DATA INTEGRITY GUARD)
+// Menyimpan normalisasi hidrologi bulanan riil dari hasil analisis UPT Lab Lingkungan DLH & BMKG.
+// ============================================================================
+model WaterStationBaseline {
+  id             String       @id @default(uuid())
+  stationId      String
+  station        WaterStation @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  month          String       // Singkatan bulan standar: "Jan", "Feb", "Mar", dll.
+  bod            Float        // Baseline BOD murni dari dokumen penelitian
+  cod            Float        // Baseline COD murni dari dokumen penelitian
+  do             Float        // Baseline DO murni dari dokumen penelitian
+  ph             Float        // Baseline pH murni dari dokumen penelitian
+  avgTemperature Float        // Rata-rata Suhu Klimatologi BMKG bulan berjalan
+  avgRainfallMm  Float        // Rata-rata Curah Hujan Bulanan Historis BMKG (mm)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([stationId, month]) // Mencegah duplikasi data baseline bulanan pada satu stasiun yang sama
 }
