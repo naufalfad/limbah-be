@@ -1,13 +1,13 @@
-// C:\Users\PC\Documents\Dev\E-LIMBAD\limbah-be\prisma\data\companiesMaster.ts
+// d:\Pekerjaan\E-Limbah\limbah-be\prisma\data\companiesMaster.ts
 import { CompanyStatus, DocType } from '@prisma/client';
 
 export const companiesMasterData = [
     // =========================================================================
-    // KLASTER UTARA EKSTREM (Sektor Perkebunan Sawit & PKS Hulu)
+    // KLASTER CITEUREUP
     // =========================================================================
     {
         id: 'COM-022',
-        companyName: 'PT. Antang Kalang Sawit Jaya (PKS Tumbang Kalang)',
+        companyName: 'PT. Citeureup Agro Industry (PKS Citeureup)',
         nib: '9120301290026',
         npwp: '01.234.567.8-622.026',
         picName: 'Joko Widodo',
@@ -18,24 +18,27 @@ export const companiesMasterData = [
         buildingArea: 80000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Tandan Buah Segar (TBS) Kelapa Sawit Mandiri',
-        waterSource: 'Embung Penampung & Air Sungai Kalang',
+        waterSource: 'Embung Penampung & Air Sungai Ciliwung',
         powerSource: 'Captive Turbin Cangkang Sawit 10 MW',
         kbli: '10431', // Industri Minyak Mentah Kelapa Sawit (CPO)
         investment: 750000000000.0,
         landArea: 1800000.0,
         employees: 1450,
-        lat: '-1.2840', // Wilayah pedalaman utara ekstrem Kotim (Kec. Antang Kalang)
-        lng: '112.6150',
-        address: 'Jl. Poros Tumbang Kalang - Tumbang Miri, Desa Tumbang Kalang, Antang Kalang, Kabupaten Kotawaringin Timur',
+        lat: '-6.4862',
+        lng: '106.8835',
+        address: 'Jl. Mayor Oking No. 12, Kelurahan Citeureup, Citeureup, Kabupaten Bogor',
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 95.0,
         picId: '',
         companyPhotoUrl: '/uploads/companies/factory-sawit-large.jpg'
     },
+    // =========================================================================
+    // KLASTER KLAPANUNGGAL
+    // =========================================================================
     {
         id: 'COM-017',
-        companyName: 'PT. Telaga Antang Sawit Lestari (PKS Nusa Agung)',
+        companyName: 'PT. Klapanunggal Agro Industry (PKS Klapanunggal)',
         nib: '9120301290020',
         npwp: '01.234.567.8-622.020',
         picName: 'Maimunah',
@@ -46,23 +49,26 @@ export const companiesMasterData = [
         buildingArea: 32000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Tandan Buah Segar (TBS) Plasma',
-        waterSource: 'Sungai Kuayan',
+        waterSource: 'Sungai Ciliwung',
         powerSource: 'Turbin Biogas PKS 2.5 MW',
         kbli: '10431',
         investment: 350000000000.0,
         landArea: 120000.0,
         employees: 650,
-        lat: '-1.6850', // Kawasan perkebunan sawit barat laut Kotim (Kec. Telaga Antang)
-        lng: '112.4920',
-        address: 'Jl. Poros Kuayan - Rantau Pulut KM 45, Desa Nusa Agung, Telaga Antang, Kabupaten Kotawaringin Timur',
+        lat: '-6.4678',
+        lng: '106.9403',
+        address: 'Jl. Raya Klapanunggal No. 45, Desa Klapanunggal, Klapanunggal, Kabupaten Bogor',
         docType: DocType.SPPL,
         status: CompanyStatus.APPROVED,
         score: 90.0,
         companyPhotoUrl: '/uploads/companies/factory-pks.jpg'
     },
+    // =========================================================================
+    // KLASTER GUNUNG PUTRI
+    // =========================================================================
     {
         id: 'COM-009',
-        companyName: 'PT. Parenggean Agro Lestari (PKS Parenggean)',
+        companyName: 'PT. Gunung Putri Agro Lestari (Gunung Putri)',
         nib: '9120301290011',
         npwp: '01.234.567.8-622.011',
         picName: 'Rudi Hartawan',
@@ -73,23 +79,26 @@ export const companiesMasterData = [
         buildingArea: 28000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Tandan Buah Segar (TBS)',
-        waterSource: 'Sungai Parenggean',
+        waterSource: 'Sungai Ciliwung',
         powerSource: 'Turbin Uap Biomassa 2.0 MW',
         kbli: '10431',
         investment: 150000000000.0,
         landArea: 250000.0,
         employees: 380,
-        lat: '-1.9050', // Wilayah tengah-utara Kotim (Kec. Parenggean)
-        lng: '112.7820',
-        address: 'Jl. Poros Parenggean - Kuala Kuayan KM 12, Kelurahan Parenggean, Parenggean, Kabupaten Kotawaringin Timur',
+        lat: '-6.3872',
+        lng: '106.9034',
+        address: 'Jl. Mercedes-Benz No. 12, Desa Cicadas, Gunung Putri, Kabupaten Bogor',
         docType: DocType.SPPL,
         status: CompanyStatus.APPROVED,
         score: 52.0,
         companyPhotoUrl: '/uploads/companies/factory-plantation.jpg'
     },
+    // =========================================================================
+    // KLASTER CILEUNGSI
+    // =========================================================================
     {
         id: 'COM-001',
-        companyName: 'PT. Mentaya Sawit Mas (PKS Cempaga Hulu)',
+        companyName: 'PT. Ciliwung Sawit Mas (Cileungsi)',
         nib: '9120301294821',
         npwp: '01.234.567.8-622.000',
         picName: 'Budi Santoso',
@@ -100,28 +109,27 @@ export const companiesMasterData = [
         buildingArea: 45000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Tandan Buah Segar (TBS) Kelapa Sawit',
-        waterSource: 'Sungai Cempaga & Air Permukaan',
+        waterSource: 'Sungai Ciliwung & Air Permukaan',
         powerSource: 'Turbin Biogas (CPO Effluent) 5 MW',
         kbli: '10431',
         investment: 350000000000.0,
         landArea: 150000.0,
         employees: 480,
-        lat: '-2.0540', // Sektor perkebunan hulu Trans-Kalimantan (Kec. Cempaga Hulu)
-        lng: '113.0420',
-        address: 'Jl. Trans Kalimantan Raya KM 72, Desa Pundu, Cempaga Hulu, Kabupaten Kotawaringin Timur',
+        lat: '-6.4027',
+        lng: '106.9582',
+        address: 'Jl. Raya Cileungsi - Jonggol KM 7, Desa Cileungsi, Cileungsi, Kabupaten Bogor',
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 85.0,
         picId: '',
         companyPhotoUrl: '/uploads/companies/factory-cement.jpg'
     },
-
     // =========================================================================
-    // KLASTER TENGAH / KOTA BESI (Sektor Penunjang & AMDK)
+    // KLASTER CIBINONG
     // =========================================================================
     {
         id: 'COM-024',
-        companyName: 'PT. Aqua Mentaya Sejahtera (Kota Besi)',
+        companyName: 'PT. Aqua Ciliwung Sejahtera (Cibinong)',
         nib: '9120301290028',
         npwp: '01.234.567.8-622.028',
         picName: 'Erick Thohir',
@@ -131,29 +139,28 @@ export const companiesMasterData = [
         yearBuilt: '2012',
         buildingArea: 12000.0,
         operationalHours: '24 Jam',
-        rawMaterials: 'Sumber Air Bawah Tanah Aquifer Kota Besi',
+        rawMaterials: 'Sumber Air Bawah Tanah Aquifer Cibinong',
         waterSource: 'Deep Well Sulingan Filter Kritis',
         powerSource: 'PLN & Genset Cadangan 1 MW',
         kbli: '11050', // Industri Air Minum Dalam Kemasan (AMDK)
         investment: 75000000000.0,
         landArea: 45000.0,
         employees: 180,
-        lat: '-2.4380', // Kawasan utara penyangga kota Sampit (Kec. Kota Besi)
-        lng: '112.9150',
-        address: 'Jl. Tjilik Riwut KM 18, Kelurahan Kota Besi Hulu, Kota Besi, Kabupaten Kotawaringin Timur',
+        lat: '-6.4816',
+        lng: '106.8560',
+        address: 'Jl. Tegar Beriman No. 18, Kelurahan Tengah, Cibinong, Kabupaten Bogor',
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 88.0,
         picId: '',
         companyPhotoUrl: '/uploads/companies/factory-water.jpg'
     },
-
     // =========================================================================
-    // KLASTER URBAN / BANTARAN SUNGAI (Sektor Kayu Lapis, AMDK & Olahan Makanan)
+    // KLASTER SENTUL
     // =========================================================================
     {
         id: 'COM-003',
-        companyName: 'PT. Rimba Makmur Utama (Baamang Plywood)',
+        companyName: 'PT. Rimba Makmur Utama (Sentul Plywood)',
         nib: '9120301290014',
         npwp: '01.234.567.8-622.014',
         picName: 'Sarah Azhari',
@@ -164,23 +171,26 @@ export const companiesMasterData = [
         buildingArea: 35000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Kayu Log Sengon & Meranti, Lem Resin, Formaldehida',
-        waterSource: 'Sumur Bor Industri & Sungai Mentaya',
+        waterSource: 'Sumur Bor Industri & Sungai Ciliwung',
         powerSource: 'PLN & Generator Uap Serbuk Kayu 2 MW',
         kbli: '16102', // Industri Penggergajian & Pengolahan Kayu
         investment: 62000000000.0,
         landArea: 70000.0,
         employees: 520,
-        lat: '-2.5020', // Tepian Sungai Mentaya, pinggiran kota Sampit (Kec. Baamang)
-        lng: '112.9350',
-        address: 'Jl. Samekto No. 12, Kelurahan Baamang Hulu, Baamang, Sampit, Kabupaten Kotawaringin Timur',
+        lat: '-6.5786',
+        lng: '106.8686',
+        address: 'Jl. Samekto No. 12, Kelurahan Sentul, Babakan Madang, Kabupaten Bogor',
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 35.0,
         companyPhotoUrl: '/uploads/companies/factory-plywood.jpg'
     },
+    // =========================================================================
+    // KLASTER CARINGIN
+    // =========================================================================
     {
         id: 'COM-013',
-        companyName: 'PT. Tirta Mentaya Sejahtera (MB Ketapang)',
+        companyName: 'PT. Tirta Ciliwung Sejahtera (Caringin)',
         nib: '9120301290015',
         npwp: '01.234.567.8-622.015',
         picName: 'Tommy Swidodo',
@@ -197,9 +207,9 @@ export const companiesMasterData = [
         investment: 14000000000.0,
         landArea: 10000.0,
         employees: 95,
-        lat: '-2.5480', // Pusat perkotaan Sampit barat (Kec. Mentawa Baru Ketapang)
-        lng: '112.9280',
-        address: 'Jl. Ki Hajar Dewantara No. 5, Mentawa Baru Ketapang, Sampit, Kabupaten Kotawaringin Timur',
+        lat: '-6.7118',
+        lng: '106.8302',
+        address: 'Jl. Raya Caringin No. 5, Caringin, Kabupaten Bogor',
         docType: DocType.SPPL,
         status: CompanyStatus.APPROVED,
         score: 87.0,
@@ -207,7 +217,7 @@ export const companiesMasterData = [
     },
     {
         id: 'COM-018',
-        companyName: 'PT. Mentaya Agro Kimia (MB Ketapang)',
+        companyName: 'PT. Ciliwung Agro Kimia (Caringin)',
         nib: '9120301290021',
         npwp: '01.234.567.8-622.021',
         picName: 'Anies Handoko',
@@ -218,15 +228,15 @@ export const companiesMasterData = [
         buildingArea: 9500.0,
         operationalHours: '16 Jam',
         rawMaterials: 'Fosfat Batuan, Asam Sulfat, Nitrogen Cair, Kalium',
-        waterSource: 'PDAM Sampit & Sungai Mentaya',
+        waterSource: 'PDAM & Sungai Ciliwung',
         powerSource: 'PLN 800 kVA',
         kbli: '20121', // Industri Pupuk Buatan Campuran
         investment: 42000000000.0,
         landArea: 25000.0,
         employees: 110,
-        lat: '-2.5550', // Jalur Lingkar Selatan (Bypass) logistik CPO (Kec. MB Ketapang)
-        lng: '112.9150',
-        address: 'Jl. Lingkar Selatan (Bypass), Mentawa Baru Ketapang, Sampit, Kabupaten Kotawaringin Timur',
+        lat: '-6.7210',
+        lng: '106.8250',
+        address: 'Jl. Lingkar Caringin (Bypass), Caringin, Kabupaten Bogor',
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 42.0,
@@ -234,7 +244,7 @@ export const companiesMasterData = [
     },
     {
         id: 'COM-019',
-        companyName: 'PT. Sampit Meat Processing (MB Ketapang)',
+        companyName: 'PT. Bogor Meat Processing (Cibinong)',
         nib: '9120301290022',
         npwp: '01.234.567.8-622.022',
         picName: 'Rudy Salim',
@@ -245,27 +255,26 @@ export const companiesMasterData = [
         buildingArea: 5500.0,
         operationalHours: '16 Jam',
         rawMaterials: 'Daging Sapi & Ayam Beku Impor, Tepung Tapioka, Rempah',
-        waterSource: 'PDAM Sampit',
+        waterSource: 'PDAM',
         powerSource: 'PLN 450 kVA',
         kbli: '10120', // Pengolahan & Pengawetan Daging
         investment: 12000000000.0,
         landArea: 8000.0,
         employees: 150,
-        lat: '-2.5650', // Kawasan permukiman padat tengah Sampit (Kec. MB Ketapang)
-        lng: '112.9320',
-        address: 'Jl. Pelita Raya, Mentawa Baru Ketapang, Sampit, Kabupaten Kotawaringin Timur',
+        lat: '-6.4950',
+        lng: '106.8450',
+        address: 'Jl. Mayor Oking No. 15, Cibinong, Kabupaten Bogor',
         docType: DocType.SPPL,
         status: CompanyStatus.APPROVED,
         score: 65.0,
         companyPhotoUrl: '/uploads/companies/factory-food.jpg'
     },
-
     // =========================================================================
-    // KLASTER SEBERANG SUNGAI (Sektor Galangan Kapal & Kayu Lapis)
+    // KLASTER LAINNYA & HILIR (Gunung Putri & Cileungsi)
     // =========================================================================
     {
         id: 'COM-004',
-        companyName: 'PT. Mentaya Maritim Shipyard (Seranau Shipyard)',
+        companyName: 'PT. Bogor Metal Industry (Gunung Putri)',
         nib: '8820301294112',
         npwp: '02.345.678.9-622.000',
         picName: 'Yusuf Kalla',
@@ -276,15 +285,15 @@ export const companiesMasterData = [
         buildingArea: 25000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Plat Baja Lambung Kapal, Cat Marine Anti-Fouling, Elektroda Las',
-        waterSource: 'Sungai Mentaya & Air Hujan',
+        waterSource: 'Sungai Ciliwung & Air Hujan',
         powerSource: 'PLN & Generator Back-up 800 kVA',
         kbli: '30111', // Industri Pembuatan Kapal & Perahu Baja
         investment: 95000000000.0,
         landArea: 65000.0,
         employees: 280,
-        lat: '-2.5620', // Belokan Sungai Mentaya sektor timur (Kec. Seranau)
-        lng: '112.9850',
-        address: 'Jl. Suka Bumi, Desa Mentaya Seberang, Seranau, Kabupaten Kotawaringin Timur',
+        lat: '-6.3750',
+        lng: '106.8950',
+        address: 'Jl. Kranggan, Gunung Putri, Kabupaten Bogor',
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 61.0,
@@ -293,7 +302,7 @@ export const companiesMasterData = [
     },
     {
         id: 'COM-007',
-        companyName: 'PT. Mentaya Kahayan Plywood (Seranau)',
+        companyName: 'PT. Ciliwung Kahayan Plywood (Gunung Putri)',
         nib: '9120301290006',
         npwp: '01.234.567.8-622.006',
         picName: 'Agus Salim',
@@ -304,27 +313,23 @@ export const companiesMasterData = [
         buildingArea: 18000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Kayu Log Rimba, Lem Resin Karbida',
-        waterSource: 'Sungai Mentaya',
+        waterSource: 'Sungai Ciliwung',
         powerSource: 'PLN & Generator Turbin Serbuk Gergaji 1.5 MW',
         kbli: '16211', // Industri Kayu Lapis/Plywood
         investment: 48000000000.0,
         landArea: 55000.0,
         employees: 310,
-        lat: '-2.5410', // Seberang sungai kota Sampit (Kec. Seranau)
-        lng: '112.9750',
-        address: 'Jl. Seberang Barat No. 88, Kelurahan Mentaya Seberang, Seranau, Kabupaten Kotawaringin Timur',
+        lat: '-6.3910',
+        lng: '106.9120',
+        address: 'Jl. Seberang Barat No. 88, Gunung Putri, Kabupaten Bogor',
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 78.0,
         companyPhotoUrl: '/uploads/companies/factory-wood.jpg'
     },
-
-    // =========================================================================
-    // KLASTER SELATAN / HILIR (Kec. Mentaya Hilir Utara - Klaster Pelabuhan & Refinery)
-    // =========================================================================
     {
         id: 'COM-005',
-        companyName: 'PT. Sampit CPO Refinery (Bagendang Refinery)',
+        companyName: 'PT. Bogor CPO Refinery (Cileungsi Refinery)',
         nib: '7720301294553',
         npwp: '03.456.789.0-622.000',
         picName: 'Agus Pratama',
@@ -335,15 +340,15 @@ export const companiesMasterData = [
         buildingArea: 55000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Crude Palm Oil (CPO) Mentah, Asam Fosfat, Bleaching Earth',
-        waterSource: 'Sungai Mentaya Sektor Hilir & Desalinasi',
+        waterSource: 'Sungai Ciliwung Sektor Hilir & Desalinasi',
         powerSource: 'Turbin Uap Serat Sawit (CPO Shell) 8 MW',
         kbli: '10432', // Industri Pemurnian / Fraksinasi Minyak Sawit (RBDPO)
         investment: 420000000000.0,
-        landArea: 120000.0,
+        landArea: 12000.0,
         employees: 450,
-        lat: '-2.6950', // Kawasan ekspor pelabuhan industri Bagendang (Kec. Mentaya Hilir Utara)
-        lng: '112.9850',
-        address: 'Kawasan Industri Hilir Sampit KM 26, Mentaya Hilir Utara, Kabupaten Kotawaringin Timur',
+        lat: '-6.4150',
+        lng: '106.9450',
+        address: 'Kawasan Industri Cileungsi KM 26, Cileungsi, Kabupaten Bogor',
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 68.0,
@@ -352,7 +357,7 @@ export const companiesMasterData = [
     },
     {
         id: 'COM-010',
-        companyName: 'PT. Mentaya Palm Oil Refinery (Bagendang Oleochemicals)',
+        companyName: 'PT. Ciliwung Palm Oil Refinery (Cileungsi Oleochemicals)',
         nib: '9120301290013',
         npwp: '01.234.567.8-622.013',
         picName: 'Yusuf Habibi',
@@ -363,15 +368,15 @@ export const companiesMasterData = [
         buildingArea: 32000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Refined Bleached Deodorized Palm Olein (RBDPO)',
-        waterSource: 'Sungai Mentaya Sulingan Air Industri',
+        waterSource: 'Sungai Ciliwung Sulingan Air Industri',
         powerSource: 'PLN & Generator Gas 3 MVA',
         kbli: '10433', // Industri Minyak Goreng Kelapa Sawit
         investment: 185000000000.0,
         landArea: 85000.0,
         employees: 350,
-        lat: '-2.6820', // Utara gerbang Pelabuhan Bagendang (Kec. Mentaya Hilir Utara)
-        lng: '112.9720',
-        address: 'Jl. Pelabuhan Baru, Bagendang Hilir, Mentaya Hilir Utara, Kabupaten Kotawaringin Timur',
+        lat: '-6.4220',
+        lng: '106.9320',
+        address: 'Jl. Raya Narogong, Cileungsi, Kabupaten Bogor',
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 71.0,
@@ -379,7 +384,7 @@ export const companiesMasterData = [
     },
     {
         id: 'COM-012',
-        companyName: 'PT. Pelindo III Regional Bagendang Multipurpose Terminal',
+        companyName: 'PT. Pelindo III Regional Cileungsi Multipurpose Terminal',
         nib: '9120301290025',
         npwp: '01.234.567.8-622.025',
         picName: 'Prabowo Subianto',
@@ -390,15 +395,15 @@ export const companiesMasterData = [
         buildingArea: 95000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Muatan Cair Kapal Tanker CPO, Kontainer Cargo, BBM Solar',
-        waterSource: 'PDAM Sampit & Water Treatment Plant',
+        waterSource: 'PDAM & Water Treatment Plant',
         powerSource: 'PLN & Generator Back-up 12 MW',
         kbli: '52221', // Jasa Pelayanan Kepelabuhanan Laut
         investment: 650000000000.0,
         landArea: 250000.0,
         employees: 820,
-        lat: '-2.7120', // Titik Dermaga Pelabuhan CPO Bagendang (Kec. Mentaya Hilir Utara)
-        lng: '112.9930',
-        address: 'Kawasan Pelabuhan Bagendang, Desa Bagendang Hulu, Mentaya Hilir Utara, Kabupaten Kotawaringin Timur',
+        lat: '-6.4050',
+        lng: '106.9630',
+        address: 'Kawasan Pelabuhan Cileungsi, Cileungsi, Kabupaten Bogor',
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 51.0,
@@ -407,7 +412,7 @@ export const companiesMasterData = [
     },
     {
         id: 'COM-014',
-        companyName: 'PT. Sumber Kahayan Sinergi (Bagendang Biodiesel)',
+        companyName: 'PT. Sumber Kahayan Sinergi (Cileungsi Biodiesel)',
         nib: '9120301290017',
         npwp: '01.234.567.8-622.017',
         picName: 'Gatot Subroto',
@@ -418,27 +423,23 @@ export const companiesMasterData = [
         buildingArea: 15000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Minyak Sawit CPO, Metanol, Katalis Natrium Metilat',
-        waterSource: 'Air Sungai Mentaya Sulingan',
+        waterSource: 'Air Sungai Ciliwung Sulingan',
         powerSource: 'PLN 2.5 MVA',
         kbli: '20114', // Industri Kimia Dasar Organik (Biodiesel/FAME)
         investment: 95000000000.0,
         landArea: 40000.0,
         employees: 180,
-        lat: '-2.7050', // Kompleks industri kimia Bagendang (Kec. Mentaya Hilir Utara)
-        lng: '112.9810',
-        address: 'Jl. Trans-Kalimantan Sektor Pelabuhan KM 28, Mentaya Hilir Utara, Kabupaten Kotawaringin Timur',
+        lat: '-6.4110',
+        lng: '106.9510',
+        address: 'Jl. Trans-Bogor Sektor Industri KM 28, Cileungsi, Kabupaten Bogor',
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 93.0,
         companyPhotoUrl: '/uploads/companies/factory-biodiesel.jpg'
     },
-
-    // =========================================================================
-    // KLASTER SELATAN EKSTREM / SAMUDA (Sektor Industri Kelapa, Karbon & Perikanan)
-    // =========================================================================
     {
         id: 'COM-021',
-        companyName: 'PT. Samuda Agro Coconut Industry (Kelapa & Karbon)',
+        companyName: 'PT. Samuda Agro Coconut Industry (Caringin Kelapa & Karbon)',
         nib: '9120301290024',
         npwp: '01.234.567.8-622.024',
         picName: 'Tommy Hartono',
@@ -449,15 +450,15 @@ export const companiesMasterData = [
         buildingArea: 15000.0,
         operationalHours: '24 Jam',
         rawMaterials: 'Kelapa Kupas Rakyat, Arang Tempurung Kelapa',
-        waterSource: 'Sumur Bor Dalam & Sungai Mentaya Hilir',
+        waterSource: 'Sumur Bor Dalam & Sungai Ciliwung Hilir',
         powerSource: 'PLN 800 kVA',
         kbli: '10433', // Pengolahan kelapa dan turunannya
         investment: 35000000000.0,
         landArea: 30000.0,
         employees: 210,
-        lat: '-2.9480', // Wilayah pesisir muara selata Kotim (Kec. Mentaya Hilir Selatan - Samuda)
-        lng: '112.9750',
-        address: 'Jl. H.M. Arsyad KM 45, Samuda Kota, Mentaya Hilir Selatan, Kabupaten Kotawaringin Timur',
+        lat: '-6.7350',
+        lng: '106.8420',
+        address: 'Jl. Raya Caringin KM 45, Caringin, Kabupaten Bogor',
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 84.0,

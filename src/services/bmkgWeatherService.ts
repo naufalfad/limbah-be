@@ -35,8 +35,8 @@ export class BmkgWeatherService {
      */
     public static async getWeatherBySubdistrict(subdistrictCode: string): Promise<BmkgWeatherForecast> {
         if (!subdistrictCode) {
-            // PROTECTED VARIATION FALLBACK: Diarahkan ke pusat administrasi Ketapang, MB Ketapang, Sampit [3]
-            return this.generateSimulatedWeather(subdistrictCode, "Ketapang", "Mentawa Baru Ketapang");
+            // PROTECTED VARIATION FALLBACK: Diarahkan ke pusat administrasi Cibinong, Bogor [3]
+            return this.generateSimulatedWeather(subdistrictCode, "Cibinong", "Cibinong");
         }
 
         const now = Date.now();
@@ -49,7 +49,7 @@ export class BmkgWeatherService {
 
         try {
             const url = `${this.API_URL}?adm4=${subdistrictCode}`;
-            console.log(`[BMKG SERVICE] Mengambil cuaca luar untuk ADM4 KWT: ${subdistrictCode}...`);
+            console.log(`[BMKG SERVICE] Mengambil cuaca luar untuk ADM4 BOGOR: ${subdistrictCode}...`);
 
             const response = await fetch(url, {
                 method: "GET",
@@ -85,9 +85,9 @@ export class BmkgWeatherService {
             }
 
             const location = rawJson.lokasi || {};
-            const subdistrictName = location.desa || "Sampit";
-            const districtName = location.kecamatan || "Mentawa Baru Ketapang";
-            const cityName = location.kotkab || "Kabupaten Kotawaringin Timur";
+            const subdistrictName = location.desa || "Cibinong";
+            const districtName = location.kecamatan || "Cibinong";
+            const cityName = location.kotkab || "Kabupaten Bogor";
 
             // 3. PARSING DATA & STANDARDIKASI SATUAN (Type Safety)
             const result: BmkgWeatherForecast = {
@@ -122,12 +122,12 @@ export class BmkgWeatherService {
 
     /**
      * Penghasil data cuaca tiruan geografis realistis (Deterministic Fallback)
-     * Ditargetkan khusus untuk wilayah administratif di Kabupaten Kotawaringin Timur [3]
+     * Ditargetkan khusus untuk wilayah administratif di Kabupaten Bogor [3]
      */
     private static generateSimulatedWeather(
         subdistrictCode: string,
-        subName = "Baamang Barat",
-        distName = "Baamang"
+        subName = "Cibinong Tengah",
+        distName = "Cibinong"
     ): BmkgWeatherForecast {
         const hash = subdistrictCode ? subdistrictCode.split('.').reduce((acc, val) => acc + parseInt(val || "0", 10), 0) : 12;
         const seed = Math.abs(Math.sin(hash));
@@ -143,7 +143,7 @@ export class BmkgWeatherService {
             subdistrictCode,
             subdistrictName: subName,
             districtName: distName,
-            cityName: "Kabupaten Kotawaringin Timur",
+            cityName: "Kabupaten Bogor",
             temperature: isRainy ? parseFloat((25 + seed * 2).toFixed(1)) : parseFloat((29 + seed * 4).toFixed(1)),
             humidity: isRainy ? parseFloat((85 + seed * 10).toFixed(0)) : parseFloat((70 + seed * 15).toFixed(0)),
             windSpeed: parseFloat((4 + seed * 10).toFixed(1)),

@@ -2,17 +2,17 @@
 import { PrismaClient } from '@prisma/client';
 
 export async function seedAqiCaches(prisma: PrismaClient) {
-  console.log('Seeding AQI simulation caches for Kotawaringin Timur...');
+  console.log('Seeding AQI simulation caches for Kabupaten Bogor...');
 
   // Menggunakan clusterId yang sama untuk menjaga kestabilan relasi API iqairService
-  // namun merubah nama, koordinat, dan parameter cuaca ke wilayah KWT/Sampit [3]
+  // namun merubah nama, koordinat, dan parameter cuaca ke wilayah Bogor [3]
   await prisma.aqiCache.createMany({
     data: [
       {
         clusterId: 'cluster-citeureup',
-        name: 'Kawasan Industri Baamang',
-        lat: '-2.5120',
-        lng: '112.9310',
+        name: 'Kawasan Industri Citeureup',
+        lat: '-6.4862',
+        lng: '106.8835',
         aqi: 138,
         weather: {
           temperature: 31,
@@ -25,9 +25,9 @@ export async function seedAqiCaches(prisma: PrismaClient) {
       },
       {
         clusterId: 'cluster-cileungsi',
-        name: 'Zona Industri Pelabuhan Bagendang',
-        lat: '-2.6950',
-        lng: '112.9850',
+        name: 'Zona Industri Cileungsi',
+        lat: '-6.4027',
+        lng: '106.9582',
         aqi: 145,
         weather: {
           temperature: 32,
@@ -40,9 +40,9 @@ export async function seedAqiCaches(prisma: PrismaClient) {
       },
       {
         clusterId: 'cluster-sentul',
-        name: 'Kawasan Mentawa Baru Ketapang',
-        lat: '-2.5350',
-        lng: '112.9280',
+        name: 'Kawasan Sentul (Babakan Madang)',
+        lat: '-6.5786',
+        lng: '106.8686',
         aqi: 72,
         weather: {
           temperature: 29,
@@ -55,5 +55,5 @@ export async function seedAqiCaches(prisma: PrismaClient) {
       }
     ]
   });
-  console.log('AQI caches for Kotawaringin Timur seeded successfully!');
+  console.log('AQI caches for Kabupaten Bogor seeded successfully!');
 }

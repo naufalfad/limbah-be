@@ -30,7 +30,7 @@ export interface CalculatedWaterTelemetry {
  * MAPPER HUBUNGAN SPASIAL PABRIK HULU - SENSOR HILIR (INFORMATION EXPERT)
  * ============================================================================
  * Menyimpan pemetaan konstan letak pabrik hulu (Upstream) untuk setiap stasiun sensor.
- * Karena Sungai Mentaya mengalir dari Utara (Hulu: Cempaga) ke Selatan (Hilir: Samuda),
+ * Karena Sungai Ciliwung mengalir dari Selatan (Hulu) ke Utara (Hilir),
  * seluruh buangan limbah cair industri di bagian hulu akan terakumulasi dan memperberat
  * beban pencemaran organik (BOD/COD) yang terbaca pada sensor di hilirnya [3].
  */
@@ -38,34 +38,34 @@ const UPSTREAM_COMPANIES_MAP: Record<string, string[]> = {
     // 1. Stasiun Hulu Cempaga: Tidak memiliki industri hulu berskala besar
     "WS-01": [],
 
-    // 2. Stasiun Tengah Baamang: Terbawa dampak limpasan dari Cempaga & Kota Besi
+    // 2. Stasiun Tengah: Terbawa dampak limpasan dari hulu
     "WS-02": [
-        "COM-001", // PT. Mentaya Sawit Mas (PKS Cempaga)
-        "COM-024"  // PT. Aqua Mentaya (Kota Besi)
+        "COM-001", // PT. Ciliwung Sawit Mas (Cileungsi)
+        "COM-024"  // PT. Aqua Ciliwung Sejahtera (Cibinong)
     ],
 
     // 3. Stasiun Hilir Pelabuhan Bagendang: Terbawa beban kumulatif perkotaan dan hulu
     "WS-03": [
-        "COM-001", // PKS Cempaga
-        "COM-024", // Air Minum Kota Besi
-        "COM-003", // PT. Rimba Makmur Utama (Baamang)
-        "COM-007", // PT. Mentaya Kahayan Plywood (Baamang)
-        "COM-013", // PT. Tirta Mentaya Sejahtera (Baamang)
-        "COM-009", // PT. Sampit Agro Industri (MB Ketapang)
-        "COM-018", // PT. Mentaya Agro Kimia (MB Ketapang)
-        "COM-019"  // PT. Sampit Meat Processing (MB Ketapang)
+        "COM-001", // PKS Cileungsi
+        "COM-024", // Air Minum Cibinong
+        "COM-003", // PT. Rimba Makmur Utama (Sentul Plywood)
+        "COM-007", // PT. Ciliwung Kahayan Plywood (Gunung Putri)
+        "COM-013", // PT. Tirta Ciliwung Sejahtera (Caringin)
+        "COM-009", // PT. Gunung Putri Agro Lestari (Gunung Putri)
+        "COM-018", // PT. Ciliwung Agro Kimia (Caringin)
+        "COM-019"  // PT. Bogor Meat Processing (Cibinong)
     ],
 
     // 4. Stasiun Muara Samuda: Menerima akumulasi total seluruh industri hulu & hilir
     "WS-04": [
         "COM-001", "COM-024", "COM-003", "COM-007", "COM-013", "COM-009", "COM-018", "COM-019",
-        "COM-004", // PT. Mentaya Maritim Shipyard (Seranau)
-        "COM-017", // PT. Sampit Plywood Industry (Seranau)
-        "COM-005", // PT. Sampit CPO Refinery (Bagendang)
-        "COM-010", // PT. Mentaya Palm Oil Refinery (Bagendang)
-        "COM-012", // PT. Pelindo Regional III Bagendang
-        "COM-014", // PT. Sumber Kahayan Sinergi (Bagendang)
-        "COM-022"  // PT. Sampit Palm Plantation (Bagendang)
+        "COM-004", // PT. Bogor Metal Industry (Gunung Putri)
+        "COM-017", // PT. Klapanunggal Agro Industry (PKS Klapanunggal)
+        "COM-005", // PT. Bogor CPO Refinery (Cileungsi)
+        "COM-010", // PT. Ciliwung Palm Oil Refinery (Cileungsi)
+        "COM-012", // PT. Pelindo Cileungsi
+        "COM-014", // PT. Sumber Kahayan Sinergi (Cileungsi Biodiesel)
+        "COM-022"  // PT. Citeureup Agro Industry (PKS Citeureup)
     ]
 };
 
@@ -269,9 +269,9 @@ export class PredictiveHydrologicalEngine {
 
         return {
             stationId,
-            stationName: station?.name || "Stasiun Air Sungai Mentaya",
-            lat: parseFloat(station?.lat || "-2.5337"), // Koordinat pusat Sampit
-            lng: parseFloat(station?.lng || "112.9515"),
+            stationName: station?.name || "Stasiun Air Sungai Ciliwung",
+            lat: parseFloat(station?.lat || "-6.4816"), // Koordinat pusat Cibinong
+            lng: parseFloat(station?.lng || "106.8560"),
             bod: fallbackData.bod,
             cod: fallbackData.cod,
             do: fallbackData.do,

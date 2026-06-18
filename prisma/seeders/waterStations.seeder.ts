@@ -4,10 +4,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export async function seedWaterStations(prisma: PrismaClient) {
-  console.log('Reading and validating real-world hydrological baselines from JSON (Kotim)...');
+  console.log('Reading and validating real-world hydrological baselines from JSON (Bogor)...');
 
-  // Mengubah rujukan ke kotim-river-normals.json untuk isolasi data wilayah [3]
-  const normalsFilePath = path.join(__dirname, '..', 'data', 'kotim-river-normals.json');
+  // Mengubah rujukan ke bogor-river-normals.json untuk isolasi data wilayah [3]
+  const normalsFilePath = path.join(__dirname, '..', 'data', 'bogor-river-normals.json');
   if (!fs.existsSync(normalsFilePath)) {
     throw new Error(`CRITICAL DATABASE INITIALIZATION ERROR: Berkas data dasar spasial perairan "${normalsFilePath}" tidak ditemukan!`);
   }
@@ -15,10 +15,10 @@ export async function seedWaterStations(prisma: PrismaClient) {
   const rawJsonData = fs.readFileSync(normalsFilePath, 'utf-8');
   const stationsData = JSON.parse(rawJsonData);
 
-  console.log(`Seeding ${stationsData.length} calibrated KWT water quality stations and monthly baselines...`);
+  console.log(`Seeding ${stationsData.length} calibrated Bogor water quality stations and monthly baselines...`);
 
   for (const st of stationsData) {
-    // Menulis entitas stasiun pemantau air Sungai Mentaya
+    // Menulis entitas stasiun pemantau air Sungai Ciliwung
     await prisma.waterStation.create({
       data: {
         id: st.id,
