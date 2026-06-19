@@ -113,7 +113,7 @@ export async function seedCompanies(prisma: PrismaClient) {
         ...finalData,
         ...extraFields,
         companyPhotoUrl,
-        picId: 'USER-005', // Hubungkan PIC default ke Budi Santoso
+        picId: comp.docType === DocType.AMDAL && comp.id !== 'COM-001' ? null : 'USER-005',
       },
     });
   }
