@@ -113,7 +113,7 @@ export async function seedCompanies(prisma: PrismaClient) {
         ...finalData,
         ...extraFields,
         companyPhotoUrl,
-        picId: comp.docType === DocType.AMDAL && comp.id !== 'COM-001' ? null : 'USER-005',
+        picId: comp.docType === DocType.AMDAL && comp.id !== 'COM-000' ? null : 'USER-005',
       },
     });
   }
