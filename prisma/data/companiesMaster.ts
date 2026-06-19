@@ -30,7 +30,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 95.0,
-        picId: '',
+        picId: 'USER-002',
         companyPhotoUrl: '/uploads/companies/factory-sawit-large.jpg'
     },
     // =========================================================================
@@ -121,7 +121,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 85.0,
-        picId: '',
+        picId: 'USER-002',
         companyPhotoUrl: '/uploads/companies/factory-cement.jpg'
     },
     // =========================================================================
@@ -152,7 +152,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 88.0,
-        picId: '',
+        picId: 'USER-002',
         companyPhotoUrl: '/uploads/companies/factory-water.jpg'
     },
     // =========================================================================
@@ -297,7 +297,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 61.0,
-        picId: '',
+        picId: 'USER-002',
         companyPhotoUrl: '/uploads/companies/factory-shipyard.jpg'
     },
     {
@@ -352,7 +352,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 68.0,
-        picId: '',
+        picId: 'USER-002',
         companyPhotoUrl: '/uploads/companies/factory-refinery.jpg'
     },
     {
@@ -407,7 +407,7 @@ export const companiesMasterData = [
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 51.0,
-        picId: '',
+        picId: 'USER-002',
         companyPhotoUrl: '/uploads/companies/port-bagendang.jpg'
     },
     {
