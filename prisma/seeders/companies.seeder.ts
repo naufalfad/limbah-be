@@ -61,7 +61,7 @@ export async function seedCompanies(prisma: PrismaClient) {
       employees: 0,
       lat: '-6.4816',
       lng: '106.8560',
-      address: 'Lokasi Belum Teridentifikasi (Kabupaten Bogor)',
+      address: 'Lokasi Belum Teridentifikasi (Kotawaringin Timur)',
       docType: DocType.SPPL,
       status: CompanyStatus.APPROVED,
     },
@@ -113,7 +113,7 @@ export async function seedCompanies(prisma: PrismaClient) {
         ...finalData,
         ...extraFields,
         companyPhotoUrl,
-        picId: 'USER-005', // Hubungkan PIC default ke Budi Santoso
+        picId: comp.docType === DocType.AMDAL && comp.id !== 'COM-000' ? null : 'USER-005',
       },
     });
   }
