@@ -12,3 +12,4 @@ COPY . .
 
 EXPOSE 5000
 CMD ["npx", "ts-node", "src/server.ts"]
+
