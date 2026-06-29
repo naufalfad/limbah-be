@@ -7,7 +7,7 @@ export const companiesMasterData = [
     // =========================================================================
     {
         id: 'COM-011',
-        companyName: 'PT. Telaga Antang Sawit Lestari (PKS Nusa Agung)',
+        companyName: 'PT. Sawitmas Nugraha Perdana',
         nib: '9120301290020',
         npwp: '01.234.567.8-622.020',
         picName: 'Maimunah',
@@ -24,9 +24,9 @@ export const companiesMasterData = [
         investment: 350000000000.0,
         landArea: 120000.0,
         employees: 650,
-        lat: '-1.6850', // Kawasan perkebunan sawit barat laut Kotim (Kec. Telaga Antang)
-        lng: '112.4920',
-        address: 'Jl. Poros Kuayan - Rantau Pulut KM 45, Desa Nusa Agung, Telaga Antang, Kabupaten Kotawaringin Timur',
+        lat: '-2.5549061613338946', // Kawasan perkebunan sawit barat laut Kotim (Kec. Telaga Antang)
+        lng: '112.94600210796057',
+        address: 'Komp. KPR BTN, Jl. Manggis V No. 16 Blok H, Kel. Mentawa Baru Hilir, Kec. Mentawa Baru Ketapang, Kabupaten Kotawaringin Timur, Kalimantan Tengah 74321',
         docType: DocType.AMDAL,
         status: CompanyStatus.APPROVED,
         score: 90.0,
@@ -334,7 +334,7 @@ export const companiesMasterData = [
         docType: DocType.SPPL,
         status: CompanyStatus.APPROVED,
         score: 87.0,
-        companyPhotoUrl: '/uploads/companies/factory-sawit-large.jpg'
+        companyPhotoUrl: '/uploads/companies/factory-pks.jpg'
     },
     {
         id: 'COM-036',
@@ -469,7 +469,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 80.0,
-        companyPhotoUrl: '/uploads/companies/factory-wood.jpg'
+        companyPhotoUrl: '/uploads/companies/factory-plywood.jpg'
     },
     {
         id: 'COM-010',
@@ -496,7 +496,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 76.0,
-        companyPhotoUrl: '/uploads/companies/factory-refinery-oil.jpg'
+        companyPhotoUrl: '/uploads/companies/factory-pks.jpg'
     },
     {
         id: 'COM-014',
@@ -523,7 +523,7 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 85.0,
-        companyPhotoUrl: '/uploads/companies/factory-biodiesel.jpg'
+        companyPhotoUrl: '/uploads/companies/factory-chemical.jpg'
     },
     {
         id: 'COM-021',
@@ -577,6 +577,6 @@ export const companiesMasterData = [
         docType: DocType.UKL_UPL,
         status: CompanyStatus.APPROVED,
         score: 82.0,
-        companyPhotoUrl: '/uploads/companies/factory-refinery.jpg'
+        companyPhotoUrl: '/uploads/companies/factory-plantation.jpg'
     },
 ];
