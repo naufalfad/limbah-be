@@ -39,33 +39,6 @@ const dummyTemplateData = [
 
 export async function seedCompanies(prisma: PrismaClient) {
   console.log('Seeding null-object company...');
-  await prisma.company.create({
-    data: {
-      id: 'COM-UNKNOWN',
-      companyName: 'Penyelidikan Lapangan (Pelanggar Belum Diketahui)',
-      nib: '0000000000000',
-      npwp: '00.000.000.0-000.000',
-      picName: 'Dinas Lingkungan Hidup',
-      picPhone: '00000000000',
-      picRole: 'Dinas',
-      investmentType: 'PMDN',
-      yearBuilt: '2026',
-      buildingArea: 0.0,
-      operationalHours: '24 Jam',
-      rawMaterials: '-',
-      waterSource: '-',
-      powerSource: '-',
-      kbli: '00000',
-      investment: 0.0,
-      landArea: 0.0,
-      employees: 0,
-      lat: '-6.4816',
-      lng: '106.8560',
-      address: 'Lokasi Belum Teridentifikasi (Kotawaringin Timur)',
-      docType: DocType.SPPL,
-      status: CompanyStatus.APPROVED,
-    },
-  });
 
   console.log('Seeding enhanced companies with document paths and parsed matrices...');
   for (const comp of companiesMasterData) {
