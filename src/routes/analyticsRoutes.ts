@@ -68,17 +68,15 @@ router.get(
 // [NEW ROUTES] API ENDPOINTS TITIK API / WILDFIRE (NASA FIRMS PROXY)
 // ============================================================================
 
-// Mengambil titik api aktif (MODIS / VIIRS) dari NASA FIRMS (dengan fail-safe simulation terkalibrasi)
+// Mengambil titik api aktif (MODIS / VIIRS) dari NASA FIRMS (Publik agar layer peta selalu sinkron)
 router.get(
     '/wildfires',
-    requireAuth,
     getWildfires
 );
 
 // Endpoint alias untuk kompatibilitas nama 'hotspots'
 router.get(
     '/hotspots',
-    requireAuth,
     getWildfires
 );
 

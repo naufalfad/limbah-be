@@ -467,10 +467,10 @@ export async function getWildfires(req: Request, res: Response) {
 
         if (isApiKeyValid) {
             try {
-                // Request data 1 hari terakhir untuk Bounding Box Indonesia via VIIRS SNPP NRT
+                // Request data 2 hari terakhir (24-48 jam ala Firemap.live) untuk Bounding Box Indonesia via VIIRS SNPP NRT
                 // Indonesia BBox: min_lon 95, min_lat -11, max_lon 141, max_lat 6
-                const firmsUrl = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${apiKey}/VIIRS_SNPP_NRT/95,-11,141,6/1`;
-                const response = await fetch(firmsUrl, { signal: AbortSignal.timeout(10000) });
+                const firmsUrl = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${apiKey}/VIIRS_SNPP_NRT/95,-11,141,6/2`;
+                const response = await fetch(firmsUrl, { signal: AbortSignal.timeout(15000) });
                 
                 if (response.ok) {
                     const csvText = await response.text();
@@ -506,10 +506,12 @@ export async function getWildfires(req: Request, res: Response) {
 
                                     // Cek kedekatan wilayah pantauan
                                     let locationLabel = `Koordinat: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-                                    if (lat >= -7.0 && lat <= -6.2 && lng >= 106.4 && lng <= 107.2) {
+                                    if (lat >= -7.5 && lat <= -5.5 && lng >= 106.0 && lng <= 108.0) {
                                         locationLabel = `Wilayah Pantauan Jawa Barat / Bogor (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-                                    } else if (lat >= -3.5 && lat <= -1.5 && lng >= 111.5 && lng <= 113.5) {
-                                        locationLabel = `Wilayah Pantauan Kotim / Kalimantan (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                                    } else if (lat >= -5.0 && lat <= 4.5 && lng >= 108.5 && lng <= 119.5) {
+                                        locationLabel = `Wilayah Pantauan Kalimantan (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                                    } else if (lat >= -6.0 && lat <= 6.0 && lng >= 95.0 && lng <= 106.0) {
+                                        locationLabel = `Wilayah Pantauan Sumatera (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
                                     }
 
                                     parsed.push({
@@ -536,9 +538,9 @@ export async function getWildfires(req: Request, res: Response) {
                         // Urutkan berdasarkan intensitas radiasi termal (FRP) tertinggi
                         parsed.sort((a, b) => b.frp - a.frp);
 
-                        // Ambil top 400 titik api paling signifikan agar peta Leaflet tetap responsif
-                        hotspots = parsed.slice(0, 400);
-                        console.log(`[FIRMS] Berhasil memuat ${parsed.length} titik api riil dari NASA FIRMS (diambil top ${hotspots.length} untuk visualisasi GIS).`);
+                        // Ambil hingga 2500 titik api riil agar seluruh sebaran Kalimantan & Indonesia tampil lengkap
+                        hotspots = parsed.slice(0, 2500);
+                        console.log(`[FIRMS] Berhasil memuat ${parsed.length} titik api riil dari NASA FIRMS (diambil ${hotspots.length} titik untuk visualisasi GIS).`);
                     }
                 }
             } catch (fetchErr: any) {
