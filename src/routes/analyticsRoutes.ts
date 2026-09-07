@@ -6,7 +6,8 @@ import {
     getAqiTelemetry,
     getBatchAqiTelemetry, // IMPOR BARU: Kontroler penarik data batch telemetri kualitas udara
     getWaterStations,     // [NEW IMPOR] Kontroler penarik stasiun kualitas air sungai
-    getWaterStationLogs   // [NEW IMPOR] Kontroler penarik log historis stasiun air
+    getWaterStationLogs,  // [NEW IMPOR] Kontroler penarik log historis stasiun air
+    getWildfires          // [NEW IMPOR] Kontroler penarik data titik api / hotspot aktif NASA FIRMS
 } from '../controllers/analyticsController';
 import { requireAuth, requireRoles } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
@@ -61,6 +62,24 @@ router.get(
     '/water-stations/:id/logs',
     requireAuth,
     getWaterStationLogs
+);
+
+// ============================================================================
+// [NEW ROUTES] API ENDPOINTS TITIK API / WILDFIRE (NASA FIRMS PROXY)
+// ============================================================================
+
+// Mengambil titik api aktif (MODIS / VIIRS) dari NASA FIRMS (dengan fail-safe simulation terkalibrasi)
+router.get(
+    '/wildfires',
+    requireAuth,
+    getWildfires
+);
+
+// Endpoint alias untuk kompatibilitas nama 'hotspots'
+router.get(
+    '/hotspots',
+    requireAuth,
+    getWildfires
 );
 
 export default router;
