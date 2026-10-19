@@ -1,4 +1,8 @@
 // src/server.ts
+import dns from 'node:dns';
+// Paksa urutan DNS ke IPv4 terlebih dahulu untuk mencegah issue ENETUNREACH di container Docker
+dns.setDefaultResultOrder('ipv4first');
+
 import dotenv from 'dotenv';
 dotenv.config();
 

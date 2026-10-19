@@ -489,7 +489,13 @@ export async function getWildfires(req: Request, res: Response) {
                 console.log('[FIRMS] Mengunduh telemetri titik api riil dari NASA FIRMS...');
                 
                 // Naikkan timeout ke 35 detik agar tidak terputus saat payload satelit besar (>8000 baris)
-                const response = await fetch(firmsUrl, { signal: AbortSignal.timeout(35000) });
+                const response = await fetch(firmsUrl, { 
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                        'Accept': 'text/csv,text/plain,*/*'
+                    },
+                    signal: AbortSignal.timeout(35000) 
+                });
                 
                 if (response.ok) {
                     const csvText = await response.text();
@@ -584,8 +590,10 @@ export async function getWildfires(req: Request, res: Response) {
                     console.warn(`[FIRMS] HTTP Error dari NASA API: ${response.status} ${response.statusText}`);
                 }
             } catch (fetchErr: any) {
-                fallbackReason = `FETCH_ERROR_${fetchErr.name || 'UNKNOWN'}: ${fetchErr.message}`;
-                console.warn('[FIRMS] Gagal mengambil data langsung dari NASA FIRMS API, mengaktifkan fail-safe simulation:', fetchErr.message);
+                const cause = fetchErr?.cause;
+                const causeDetail = cause ? (cause.code || cause.message || String(cause)) : '';
+                fallbackReason = `FETCH_ERROR_${fetchErr.name || 'UNKNOWN'}: ${fetchErr.message}${causeDetail ? ` (${causeDetail})` : ''}`;
+                console.warn('[FIRMS] Gagal mengambil data langsung dari NASA FIRMS API, mengaktifkan fail-safe simulation:', fetchErr.message, causeDetail);
             }
         }
 
