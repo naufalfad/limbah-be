@@ -1,6 +1,6 @@
-// src/controllers/analyticsController.ts
 import { Request, Response } from 'express';
 import { PrismaClient, SourceType } from '@prisma/client';
+import https from 'node:https';
 import { IqairService } from '../services/iqairService';
 import { PredictiveHydrologicalEngine } from '../services/predictiveEngine';
 
@@ -451,6 +451,43 @@ const WILDFIRE_CACHE_TTL = 15 * 60 * 1000; // 15 menit untuk data live NASA
 const SIMULATED_CACHE_TTL = 30 * 1000; // 30 detik untuk data fallback agar segera retry live
 
 /**
+ * HTTP Client khusus IPv4 (Dual-Stack Bypasser).
+ * Memaksa resolusi DNS dan koneksi TCP hanya melalui IPv4 (family: 4).
+ * Ini mengeliminasi secara tuntas problem 'ETIMEDOUT' dan 'ENETUNREACH'
+ * akibat IPv6 black-hole routing pada container Docker / Cloud VPS.
+ */
+function fetchIpv4(url: string, timeoutMs = 50000): Promise<{ statusCode: number; data: string }> {
+    return new Promise((resolve, reject) => {
+        const req = https.get(url, {
+            family: 4, // WAJIB: Paksa IPv4 untuk mengeliminasi timeout IPv6 black-hole di Docker/VPS
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/csv,text/plain,*/*'
+            },
+            timeout: timeoutMs
+        }, (res) => {
+            let body = '';
+            res.on('data', chunk => { body += chunk; });
+            res.on('end', () => {
+                resolve({
+                    statusCode: res.statusCode || 200,
+                    data: body
+                });
+            });
+        });
+
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error(`REQUEST_TIMEOUT_${timeoutMs}ms`));
+        });
+
+        req.on('error', (err) => {
+            reject(err);
+        });
+    });
+}
+
+/**
  * Mengambil data titik api / hotspot aktif (MODIS / VIIRS) dari NASA FIRMS API.
  * Jika MAP_KEY tidak disetel atau terjadi gangguan jaringan, sistem otomatis
  * beralih ke data telemetri spasial hotspot terkalibrasi di wilayah Bogor & Kotawaringin Timur.
@@ -483,22 +520,23 @@ export async function getWildfires(req: Request, res: Response) {
             console.warn('[FIRMS] API key FIRMS_MAP_KEY belum disetel di .env atau bernilai default.');
         } else {
             try {
-                // Request data 2 hari terakhir (24-48 jam ala Firemap.live) untuk Bounding Box Indonesia via VIIRS SNPP NRT
+                // Request data 2 hari terakhir untuk Bounding Box Indonesia via VIIRS SNPP NRT
                 // Indonesia BBox: min_lon 95, min_lat -11, max_lon 141, max_lat 6
-                const firmsUrl = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${apiKey}/VIIRS_SNPP_NRT/95,-11,141,6/2`;
-                console.log('[FIRMS] Mengunduh telemetri titik api riil dari NASA FIRMS...');
+                const firmsUrl2Day = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${apiKey}/VIIRS_SNPP_NRT/95,-11,141,6/2`;
+                console.log('[FIRMS] Mengunduh telemetri titik api riil dari NASA FIRMS via IPv4 channel...');
                 
-                // Naikkan timeout ke 35 detik agar tidak terputus saat payload satelit besar (>8000 baris)
-                const response = await fetch(firmsUrl, { 
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                        'Accept': 'text/csv,text/plain,*/*'
-                    },
-                    signal: AbortSignal.timeout(35000) 
-                });
+                let resObj: { statusCode: number; data: string };
+                try {
+                    // Coba query 2 hari (timeout 45 detik)
+                    resObj = await fetchIpv4(firmsUrl2Day, 45000);
+                } catch (timeoutErr: any) {
+                    console.warn(`[FIRMS] Query 2-hari lambat (${timeoutErr.message}), mencoba fallback cepat 1-hari...`);
+                    const firmsUrl1Day = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${apiKey}/VIIRS_SNPP_NRT/95,-11,141,6/1`;
+                    resObj = await fetchIpv4(firmsUrl1Day, 20000);
+                }
                 
-                if (response.ok) {
-                    const csvText = await response.text();
+                if (resObj.statusCode === 200) {
+                    const csvText = resObj.data;
                     const lines = csvText.trim().split('\n');
                     
                     if (lines.length > 1 && !csvText.includes('Invalid API call')) {
@@ -586,8 +624,8 @@ export async function getWildfires(req: Request, res: Response) {
                         console.warn('[FIRMS] Respons dari NASA tidak valid atau kosong:', csvText);
                     }
                 } else {
-                    fallbackReason = `HTTP_${response.status}_${response.statusText}`;
-                    console.warn(`[FIRMS] HTTP Error dari NASA API: ${response.status} ${response.statusText}`);
+                    fallbackReason = `HTTP_${resObj.statusCode}`;
+                    console.warn(`[FIRMS] HTTP Error dari NASA API: ${resObj.statusCode}`);
                 }
             } catch (fetchErr: any) {
                 const cause = fetchErr?.cause;
@@ -752,4 +790,25 @@ export async function getWildfires(req: Request, res: Response) {
             error: error.message || 'Internal server error'
         });
     }
+}
+
+/**
+ * Inisialisasi background prefetch titik api satelit NASA saat server boot.
+ * Mengunduh ribuan data titik api secara asynchronous di background 
+ * sehingga browser pengguna langsung menerima respons instan (<10ms).
+ */
+export function initWildfirePrefetch() {
+    setTimeout(async () => {
+        try {
+            console.log('[FIRMS Background Worker] Memulai prefetch awal titik api NASA FIRMS...');
+            const dummyReq = {} as Request;
+            const dummyRes = {
+                status: () => dummyRes,
+                json: () => dummyRes
+            } as unknown as Response;
+            await getWildfires(dummyReq, dummyRes);
+        } catch (e: any) {
+            console.warn('[FIRMS Background Worker] Prefetch awal gagal (akan dicoba saat request pertama):', e.message);
+        }
+    }, 2500);
 }

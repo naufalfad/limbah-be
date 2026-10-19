@@ -8,6 +8,7 @@ dotenv.config();
 
 import app from './app';
 import { IqairService } from './services/iqairService'; // INJEKSI IMPOR: Membawa layanan pengelola stasiun klaster
+import { initWildfirePrefetch } from './controllers/analyticsController';
 
 const PORT = process.env.PORT || 5000;
 
@@ -20,4 +21,7 @@ app.listen(PORT, () => {
 
   // INJEKSI BARU: Inisialisasi Throttled Background Worker Caching Kualitas Udara (LOD Protection)
   IqairService.initBackgroundWorker();
+
+  // Prefetch data titik api satelit NASA FIRMS ke in-memory cache saat server boot
+  initWildfirePrefetch();
 });
