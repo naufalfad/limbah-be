@@ -440,8 +440,15 @@ export interface WildfireHotspot {
     source: 'NASA_FIRMS_LIVE' | 'SIMULATED_HOTSPOT';
 }
 
-let cachedWildfires: { data: WildfireHotspot[]; timestamp: number } | null = null;
-const WILDFIRE_CACHE_TTL = 10 * 60 * 1000; // 10 menit
+let cachedWildfires: { 
+    data: WildfireHotspot[]; 
+    timestamp: number; 
+    source: 'NASA_FIRMS_LIVE' | 'SIMULATED_HOTSPOT';
+    wmsUrl: string | null;
+    firmsMapKey: string | null;
+} | null = null;
+const WILDFIRE_CACHE_TTL = 15 * 60 * 1000; // 15 menit untuk data live NASA
+const SIMULATED_CACHE_TTL = 30 * 1000; // 30 detik untuk data fallback agar segera retry live
 
 /**
  * Mengambil data titik api / hotspot aktif (MODIS / VIIRS) dari NASA FIRMS API.
@@ -451,26 +458,38 @@ const WILDFIRE_CACHE_TTL = 10 * 60 * 1000; // 10 menit
 export async function getWildfires(req: Request, res: Response) {
     try {
         const now = Date.now();
-        if (cachedWildfires && now - cachedWildfires.timestamp < WILDFIRE_CACHE_TTL) {
-            return res.status(200).json({
-                success: true,
-                count: cachedWildfires.data.length,
-                source: cachedWildfires.data[0]?.source || 'CACHED',
-                data: cachedWildfires.data
-            });
+        if (cachedWildfires) {
+            const ttl = cachedWildfires.source === 'NASA_FIRMS_LIVE' ? WILDFIRE_CACHE_TTL : SIMULATED_CACHE_TTL;
+            if (now - cachedWildfires.timestamp < ttl) {
+                return res.status(200).json({
+                    success: true,
+                    count: cachedWildfires.data.length,
+                    source: cachedWildfires.source,
+                    firmsMapKey: cachedWildfires.firmsMapKey,
+                    wmsUrl: cachedWildfires.wmsUrl,
+                    data: cachedWildfires.data
+                });
+            }
         }
 
         const apiKey = process.env.FIRMS_MAP_KEY;
-        const isApiKeyValid = apiKey && apiKey.trim() !== '' && apiKey !== 'your_nasa_firms_map_key_here';
+        const isApiKeyValid = Boolean(apiKey && apiKey.trim() !== '' && apiKey !== 'your_nasa_firms_map_key_here');
 
         let hotspots: WildfireHotspot[] = [];
+        let fallbackReason: string | null = null;
 
-        if (isApiKeyValid) {
+        if (!isApiKeyValid) {
+            fallbackReason = 'FIRMS_MAP_KEY_NOT_CONFIGURED';
+            console.warn('[FIRMS] API key FIRMS_MAP_KEY belum disetel di .env atau bernilai default.');
+        } else {
             try {
                 // Request data 2 hari terakhir (24-48 jam ala Firemap.live) untuk Bounding Box Indonesia via VIIRS SNPP NRT
                 // Indonesia BBox: min_lon 95, min_lat -11, max_lon 141, max_lat 6
                 const firmsUrl = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${apiKey}/VIIRS_SNPP_NRT/95,-11,141,6/2`;
-                const response = await fetch(firmsUrl, { signal: AbortSignal.timeout(15000) });
+                console.log('[FIRMS] Mengunduh telemetri titik api riil dari NASA FIRMS...');
+                
+                // Naikkan timeout ke 35 detik agar tidak terputus saat payload satelit besar (>8000 baris)
+                const response = await fetch(firmsUrl, { signal: AbortSignal.timeout(35000) });
                 
                 if (response.ok) {
                     const csvText = await response.text();
@@ -478,7 +497,8 @@ export async function getWildfires(req: Request, res: Response) {
                     
                     if (lines.length > 1 && !csvText.includes('Invalid API call')) {
                         const headers = lines[0].split(',').map(h => h.trim());
-                        const parsed: WildfireHotspot[] = [];
+                        const parsedPriority: WildfireHotspot[] = [];
+                        const parsedOthers: WildfireHotspot[] = [];
                         
                         // Parse baris CSV ke objek JSON
                         for (let i = 1; i < lines.length; i++) {
@@ -506,15 +526,19 @@ export async function getWildfires(req: Request, res: Response) {
 
                                     // Cek kedekatan wilayah pantauan
                                     let locationLabel = `Koordinat: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+                                    let isPriority = false;
+
                                     if (lat >= -7.5 && lat <= -5.5 && lng >= 106.0 && lng <= 108.0) {
                                         locationLabel = `Wilayah Pantauan Jawa Barat / Bogor (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                                        isPriority = true;
                                     } else if (lat >= -5.0 && lat <= 4.5 && lng >= 108.5 && lng <= 119.5) {
                                         locationLabel = `Wilayah Pantauan Kalimantan (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                                        isPriority = true;
                                     } else if (lat >= -6.0 && lat <= 6.0 && lng >= 95.0 && lng <= 106.0) {
                                         locationLabel = `Wilayah Pantauan Sumatera (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
                                     }
 
-                                    parsed.push({
+                                    const spot: WildfireHotspot = {
                                         id: `firms-live-${i}-${lat.toFixed(4)}-${lng.toFixed(4)}`,
                                         latitude: lat,
                                         longitude: lng,
@@ -530,20 +554,37 @@ export async function getWildfires(req: Request, res: Response) {
                                         daynight: cols[headers.indexOf('daynight')] === 'N' ? 'N' : 'D',
                                         locationName: locationLabel,
                                         source: 'NASA_FIRMS_LIVE'
-                                    });
+                                    };
+
+                                    if (isPriority) {
+                                        parsedPriority.push(spot);
+                                    } else {
+                                        parsedOthers.push(spot);
+                                    }
                                 }
                             }
                         }
 
                         // Urutkan berdasarkan intensitas radiasi termal (FRP) tertinggi
-                        parsed.sort((a, b) => b.frp - a.frp);
+                        parsedPriority.sort((a, b) => b.frp - a.frp);
+                        parsedOthers.sort((a, b) => b.frp - a.frp);
 
-                        // Ambil hingga 2500 titik api riil agar seluruh sebaran Kalimantan & Indonesia tampil lengkap
-                        hotspots = parsed.slice(0, 2500);
-                        console.log(`[FIRMS] Berhasil memuat ${parsed.length} titik api riil dari NASA FIRMS (diambil ${hotspots.length} titik untuk visualisasi GIS).`);
+                        // Ambil SEMUA titik prioritas wilayah kerja E-LIMBAD (Jabar & Kotim),
+                        // lalu penuhi sisanya dengan titik api nasional terpanas hingga 3000 titik.
+                        const remainingQuota = Math.max(0, 3000 - parsedPriority.length);
+                        hotspots = [...parsedPriority, ...parsedOthers.slice(0, remainingQuota)];
+
+                        console.log(`[FIRMS] Berhasil memuat ${lines.length - 1} data mentah dari NASA FIRMS. Prioritas: ${parsedPriority.length} titik, Total tersaji: ${hotspots.length} titik.`);
+                    } else {
+                        fallbackReason = `NASA_RETURNED_EMPTY_OR_ERROR: ${csvText.slice(0, 100)}`;
+                        console.warn('[FIRMS] Respons dari NASA tidak valid atau kosong:', csvText);
                     }
+                } else {
+                    fallbackReason = `HTTP_${response.status}_${response.statusText}`;
+                    console.warn(`[FIRMS] HTTP Error dari NASA API: ${response.status} ${response.statusText}`);
                 }
             } catch (fetchErr: any) {
+                fallbackReason = `FETCH_ERROR_${fetchErr.name || 'UNKNOWN'}: ${fetchErr.message}`;
                 console.warn('[FIRMS] Gagal mengambil data langsung dari NASA FIRMS API, mengaktifkan fail-safe simulation:', fetchErr.message);
             }
         }
@@ -674,14 +715,26 @@ export async function getWildfires(req: Request, res: Response) {
             ];
         }
 
-        cachedWildfires = { data: hotspots, timestamp: now };
+        const isLive = hotspots.length > 0 && hotspots[0].source === 'NASA_FIRMS_LIVE';
+        const effectiveWmsUrl = isApiKeyValid ? `https://firms.modaps.eosdis.nasa.gov/mapserver/wms/fires/${apiKey}/` : null;
+
+        const resolvedApiKey = (isApiKeyValid && apiKey) ? apiKey : null;
+
+        cachedWildfires = { 
+            data: hotspots, 
+            timestamp: now,
+            source: isLive ? 'NASA_FIRMS_LIVE' : 'SIMULATED_HOTSPOT',
+            firmsMapKey: resolvedApiKey,
+            wmsUrl: effectiveWmsUrl
+        };
 
         return res.status(200).json({
             success: true,
             count: hotspots.length,
-            source: hotspots[0]?.source || 'UNKNOWN',
-            firmsMapKey: isApiKeyValid ? apiKey : null,
-            wmsUrl: isApiKeyValid ? `https://firms.modaps.eosdis.nasa.gov/mapserver/wms/fires/${apiKey}/` : null,
+            source: isLive ? 'NASA_FIRMS_LIVE' : 'SIMULATED_HOTSPOT',
+            fallbackReason: isLive ? null : fallbackReason,
+            firmsMapKey: resolvedApiKey,
+            wmsUrl: effectiveWmsUrl,
             data: hotspots
         });
     } catch (error: any) {
